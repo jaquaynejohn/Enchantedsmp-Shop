@@ -38,6 +38,11 @@ public class ShopManager implements Listener {
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
+    // Main shop command connection
+    public void openShop(Player player) {
+        openMainMenu(player);
+    }
+
     public void openMainMenu(Player player) {
         MenuHolder holder = new MenuHolder(false);
 
@@ -84,7 +89,9 @@ public class ShopManager implements Listener {
 
     public void openEditorMenu(Player player) {
         if (!player.isOp()) {
-            player.sendMessage(color("&cYou cannot access the shop editor."));
+            player.sendMessage(color(
+                    "&cYou cannot access the shop editor."
+            ));
             return;
         }
 
@@ -134,7 +141,8 @@ public class ShopManager implements Listener {
 
     @EventHandler
     public void onShopClick(InventoryClickEvent event) {
-        if (!(event.getInventory().getHolder() instanceof MenuHolder holder)) {
+        if (!(event.getInventory().getHolder()
+                instanceof MenuHolder holder)) {
             return;
         }
 
