@@ -1,0 +1,59 @@
+
+# EnchantedSMP Configuration
+
+settings:
+  currency: "$"
+
+shop:
+  title: "&5&lENCHANTEDSMP SHOP"
+  size: 54
+
+  categories:
+    cpvp:
+      title: "&5&lCRYSTAL PVP"
+      size: 54
+
+      loadout:
+        armor:
+          helmet:
+            material: NETHERITE_HELMET
+            amount: 1
+            price: 5000
+          chestplate:
+            material: NETHERITE_CHESTPLATE
+            amount: 1
+            price: 8000
+          leggings:
+            material: NETHERITE_LEGGINGS
+            amount: 1
+            price: 7000
+          boots:
+            material: NETHERITE_BOOTS
+            amount: 1
+            price: 5000
+
+        items:
+          end_crystal:
+            material: END_CRYSTAL
+            amount: 64
+            price: 6000
+          obsidian:
+            material: OBSIDIAN
+            amount: 64
+            price: 3000
+          totem:
+            material: TOTEM_OF_UNDYING
+            amount: 8
+            price: 8000
+          ender_pearl:
+            material: ENDER_PEARL
+            amount: 16
+            price: 2000
+          golden_apple:
+            material: GOLDEN_APPLE
+            amount: 32
+            price: 3000
+          experience_bottle:
+            material: EXPERIENCE_BOTTLE
+            amount: 64
+            price: 2000
