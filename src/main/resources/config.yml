@@ -1,25 +1,23 @@
 
 # ==========================================
-#          ENCHANTEDSMP CONFIG
+#              ENCHANTEDSMP
 # ==========================================
 
 settings:
   currency: "$"
 
 # ==========================================
-#             SHARD SYSTEM
+#                SHARDS
 # ==========================================
 
 shards:
   enabled: true
-
-  # Give online players shards automatically
   reward-interval-seconds: 60
   reward-amount: 200
   notify-player: true
 
 # ==========================================
-#                MAIN SHOP
+#                 MAIN SHOP
 # ==========================================
 
 shop:
@@ -28,54 +26,40 @@ shop:
 
   categories:
 
-    # ======================================
-    #              BUILDING
-    # ======================================
+    # BUILDING
     building:
       title: "&6&lBUILDING"
       size: 54
-
       items: {}
 
-    # ======================================
-    #              REDSTONE
-    # ======================================
+    # REDSTONE
     redstone:
       title: "&c&lREDSTONE"
       size: 54
-
       items: {}
 
-    # ======================================
-    #                TRAPS
-    # ======================================
+    # TRAPS
     traps:
       title: "&4&lTRAPS"
       size: 54
-
       items: {}
 
-    # ======================================
-    #                 END
-    # ======================================
+    # END
     end:
       title: "&5&lEND"
       size: 54
-
       items: {}
 
-    # ======================================
-    #                NETHER
-    # ======================================
+    # NETHER
     nether:
       title: "&6&lNETHER"
       size: 54
-
       items: {}
 
     # ======================================
-    #             CRYSTAL PVP
+    #              CRYSTAL PVP
     # ======================================
+
     cpvp:
       title: "&d&lCRYSTAL PVP"
       size: 54
@@ -133,31 +117,90 @@ shop:
             amount: 64
             price: 2000
 
-    # ======================================
-    #              MOB DROPS
-    # ======================================
+    # MOB DROPS
     mob_drops:
       title: "&8&lMOB DROPS"
       size: 54
-
       items: {}
 
-    # ======================================
-    #                FARMING
-    # ======================================
+    # FARMING
     farming:
       title: "&a&lFARMING"
       size: 54
-
       items: {}
 
     # ======================================
-    #               SHARD SHOP
+    #                SHARD SHOP
     # ======================================
-    shard_shop:
-      title: "&d&lSHARD SHOP"
-      size: 54
 
+    shard_shop:
+      title: "&d&lSPAWNER SHOP"
+      size: 54
       currency: "SHARDS"
 
-      items: {}
+      spawners:
+
+        zombie:
+          material: SPAWNER
+          mob: ZOMBIE
+          price: 2000
+
+        skeleton:
+          material: SPAWNER
+          mob: SKELETON
+          price: 3000
+
+        creeper:
+          material: SPAWNER
+          mob: CREEPER
+          price: 5000
+
+        spider:
+          material: SPAWNER
+          mob: SPIDER
+          price: 2500
+
+        cave_spider:
+          material: SPAWNER
+          mob: CAVE_SPIDER
+          price: 3500
+
+        blaze:
+          material: SPAWNER
+          mob: BLAZE
+          price: 6000
+
+        enderman:
+          material: SPAWNER
+          mob: ENDERMAN
+          price: 7000
+
+        witch:
+          material: SPAWNER
+          mob: WITCH
+          price: 4500
+
+        slime:
+          material: SPAWNER
+          mob: SLIME
+          price: 4000
+
+        magma_cube:
+          material: SPAWNER
+          mob: MAGMA_CUBE
+          price: 4500
+
+        guardian:
+          material: SPAWNER
+          mob: GUARDIAN
+          price: 8000
+
+        silverfish:
+          material: SPAWNER
+          mob: SILVERFISH
+          price: 2500
+
+        endermite:
+          material: SPAWNER
+          mob: ENDERMITE
+          price: 3500
