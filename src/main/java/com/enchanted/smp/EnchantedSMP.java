@@ -22,6 +22,7 @@ public class EnchantedSMP extends JavaPlugin {
     private AuctionHouseManager auctionHouseManager;
     private OrderManager orderManager;
     private SpawnerManager spawnerManager;
+    private KitManager kitManager;
 
     @Override
     public void onEnable() {
@@ -37,6 +38,7 @@ public class EnchantedSMP extends JavaPlugin {
         shopManager = new ShopManager(this);
         auctionHouseManager = new AuctionHouseManager(this);
         orderManager = new OrderManager(this);
+        kitManager = new KitManager(this);
 
         getLogger().info("EnchantedSMP has been enabled!");
     }
@@ -88,6 +90,10 @@ public class EnchantedSMP extends JavaPlugin {
 
             case "order":
                 handleOrder(player, args);
+                return true;
+
+            case "kit":
+                kitManager.openKits(player);
                 return true;
 
             default:
@@ -286,12 +292,17 @@ public class EnchantedSMP extends JavaPlugin {
         return spawnerManager;
     }
 
+    public KitManager getKitManager() {
+        return kitManager;
+    }
+
     @Override
     public void onDisable() {
         if (shardManager != null) shardManager.save();
         if (auctionHouseManager != null) auctionHouseManager.save();
         if (orderManager != null) orderManager.save();
         if (spawnerManager != null) spawnerManager.saveSpawners();
+        if (kitManager != null) kitManager.save();
     }
 
     private String color(String text) {
