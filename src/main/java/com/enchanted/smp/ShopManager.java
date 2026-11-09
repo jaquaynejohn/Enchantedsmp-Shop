@@ -1,6 +1,8 @@
 
 package com.enchanted.smp;
 
+import io.papermc.paper.event.player.AsyncChatEvent;
+import net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.Material;
@@ -17,14 +19,20 @@ import org.bukkit.inventory.InventoryHolder;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class ShopManager implements Listener {
 
     private final EnchantedSMP plugin;
+
     private final Map<Integer, String> categories = new LinkedHashMap<>();
+    private final Map<Integer, String> editorCategories = new LinkedHashMap<>();
+    private final Map<UUID, PendingEdit> pendingEdits = new ConcurrentHashMap<>();
 
     public ShopManager(EnchantedSMP plugin) {
         this.plugin = plugin;
@@ -39,6 +47,15 @@ public class ShopManager implements Listener {
         categories.put(25, "farming");
         categories.put(31, "shard_shop");
 
+        editorCategories.put(10, "building");
+        editorCategories.put(12, "redstone");
+        editorCategories.put(14, "traps");
+        editorCategories.put(16, "end");
+        editorCategories.put(19, "nether");
+        editorCategories.put(21, "cpvp");
+        editorCategories.put(23, "mob_drops");
+        editorCategories.put(25, "farming");
+
         Bukkit.getPluginManager().registerEvents(this, plugin);
     }
 
@@ -48,9 +65,11 @@ public class ShopManager implements Listener {
 
     public void openMainMenu(Player player) {
         MenuHolder holder = new MenuHolder("main");
+
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lENCHANTEDSMP SHOP")
         );
+
         holder.setInventory(inventory);
 
         addCategory(inventory, 10, Material.BRICKS,
@@ -74,7 +93,7 @@ public class ShopManager implements Listener {
 
         if (player.isOp()) {
             addCategory(inventory, 8, Material.ENCHANTED_BOOK,
-                    "&d&lSHOP EDITOR", "&7Click to edit the shop");
+                    "&d&lSHOP EDITOR", "&7Manage shop categories and items");
         }
 
         player.openInventory(inventory);
@@ -93,47 +112,47 @@ public class ShopManager implements Listener {
         MenuHolder holder = new MenuHolder("category");
         holder.category = category;
 
-        Inventory inventory = Bukkit.createInventory(
-                holder, 54,
-                color("&5&l" + category.replace("_", " ").toUpperCase())
+        String title = plugin.getConfig().getString(
+                "shop.categories." + category + ".title",
+                "&5&l" + category.replace("_", " ").toUpperCase()
         );
+
+        int size = validSize(plugin.getConfig().getInt(
+                "shop.categories." + category + ".size", 54
+        ));
+
+        Inventory inventory = Bukkit.createInventory(holder, size, color(title));
         holder.setInventory(inventory);
 
         int slot = 0;
 
         for (String key : section.getKeys(false)) {
-            if (slot >= 45) break;
+            if (slot >= size - 9) break;
 
             String itemPath = path + "." + key;
+            Material material = getMaterial(itemPath + ".material");
 
-            Material material = Material.matchMaterial(
-                    plugin.getConfig().getString(itemPath + ".material", "")
-            );
-
-            if (material == null || material.isAir()) continue;
+            if (material == null) continue;
 
             int amount = plugin.getConfig().getInt(itemPath + ".amount", 1);
             double price = plugin.getConfig().getDouble(itemPath + ".price", 0);
 
-            if (amount <= 0 || amount > material.getMaxStackSize()
-                    || !Double.isFinite(price) || price <= 0) {
-                continue;
-            }
+            if (!validItem(material, amount, price)) continue;
 
             addShopItem(inventory, holder, slot,
                     material, amount, price, itemPath);
             slot++;
         }
 
-        addCategory(inventory, 49, Material.ARROW,
+        addCategory(inventory, size - 5, Material.ARROW,
                 "&c&lBACK", "&7Return to the main shop");
-
-        if (slot == 0) {
-            player.sendMessage(color("&cThis category has no valid items in config.yml."));
-        }
 
         player.openInventory(inventory);
     }
+
+    // ==========================================
+    //                 SHOP EDITOR
+    // ==========================================
 
     public void openEditorMenu(Player player) {
         if (!player.isOp()) {
@@ -145,25 +164,369 @@ public class ShopManager implements Listener {
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lSHOP EDITOR")
         );
+
         holder.setInventory(inventory);
 
-        addCategory(inventory, 20, Material.CHEST,
-                "&a&lEDIT CATEGORIES", "&7Manage shop categories");
-        addCategory(inventory, 22, Material.DIAMOND_SWORD,
-                "&b&lEDIT ITEMS", "&7Manage shop items");
-        addCategory(inventory, 24, Material.GOLD_INGOT,
-                "&6&lEDIT PRICES", "&7Change item prices");
+        addCategory(inventory, 10, Material.BRICKS,
+                "&6&lBUILDING", "&7Edit building shop");
+        addCategory(inventory, 12, Material.REDSTONE,
+                "&c&lREDSTONE", "&7Edit redstone shop");
+        addCategory(inventory, 14, Material.TRIPWIRE_HOOK,
+                "&4&lTRAPS", "&7Edit traps shop");
+        addCategory(inventory, 16, Material.ENDER_PEARL,
+                "&5&lEND", "&7Edit End shop");
+        addCategory(inventory, 19, Material.BLAZE_ROD,
+                "&6&lNETHER", "&7Edit Nether shop");
+        addCategory(inventory, 21, Material.END_CRYSTAL,
+                "&d&lCPVP", "&7Edit CPvP items");
+        addCategory(inventory, 23, Material.GUNPOWDER,
+                "&8&lMOB DROPS", "&7Edit mob drops shop");
+        addCategory(inventory, 25, Material.SUGAR_CANE,
+                "&a&lFARMING", "&7Edit farming shop");
+
         addCategory(inventory, 49, Material.ARROW,
-                "&c&lBACK", "&7Return to the shop");
+                "&c&lBACK", "&7Return to the main shop");
 
         player.openInventory(inventory);
     }
 
+    private String getEditorItemsPath(String category) {
+        if (category.equals("cpvp")) {
+            return "shop.categories.cpvp.loadout.items";
+        }
+
+        return "shop.categories." + category + ".items";
+    }
+
+    private void openEditorItems(Player player, String category) {
+        if (!player.isOp()) return;
+
+        String path = getEditorItemsPath(category);
+        ConfigurationSection section =
+                plugin.getConfig().getConfigurationSection(path);
+
+        MenuHolder holder = new MenuHolder("editor_items");
+        holder.category = category;
+
+        Inventory inventory = Bukkit.createInventory(
+                holder, 54,
+                color("&5&lEDIT " + category.replace("_", " ").toUpperCase())
+        );
+
+        holder.setInventory(inventory);
+
+        if (section != null) {
+            int slot = 0;
+
+            for (String key : section.getKeys(false)) {
+                if (slot >= 45) break;
+
+                String itemPath = path + "." + key;
+                Material material = getMaterial(itemPath + ".material");
+
+                if (material == null) continue;
+
+                int amount = plugin.getConfig().getInt(itemPath + ".amount", 1);
+                double price = plugin.getConfig().getDouble(itemPath + ".price", 0);
+
+                ItemStack display = new ItemStack(material);
+                ItemMeta meta = display.getItemMeta();
+
+                meta.setDisplayName(color("&e" + key));
+                meta.setLore(List.of(
+                        color("&7Material: &f" + material.name()),
+                        color("&7Amount: &f" + amount),
+                        color("&7Price: &a$" + price),
+                        color("&eClick to edit this item")
+                ));
+
+                display.setItemMeta(meta);
+                inventory.setItem(slot, display);
+
+                holder.entries.put(slot,
+                        new ShopEntry(material, amount, price, itemPath));
+
+                slot++;
+            }
+        }
+
+        addCategory(inventory, 45, Material.EMERALD,
+                "&a&lADD ITEM", "&7Add a new shop item");
+
+        addCategory(inventory, 49, Material.ARROW,
+                "&c&lBACK", "&7Return to editor categories");
+
+        player.openInventory(inventory);
+    }
+
+    private void openItemEditor(Player player, String category, ShopEntry entry) {
+        if (!player.isOp()) return;
+
+        MenuHolder holder = new MenuHolder("editor_item");
+        holder.category = category;
+        holder.selectedPath = entry.path;
+
+        Inventory inventory = Bukkit.createInventory(
+                holder, 54, color("&5&lEDIT SHOP ITEM")
+        );
+
+        holder.setInventory(inventory);
+
+        ItemStack display = new ItemStack(entry.material);
+        ItemMeta meta = display.getItemMeta();
+
+        meta.setDisplayName(color("&eCURRENT ITEM"));
+        meta.setLore(List.of(
+                color("&7Material: &f" + entry.material.name()),
+                color("&7Amount: &f" + entry.amount),
+                color("&7Price: &a$" + entry.price)
+        ));
+
+        display.setItemMeta(meta);
+        inventory.setItem(4, display);
+
+        addCategory(inventory, 20, Material.ANVIL,
+                "&b&lCHANGE MATERIAL", "&7Change the item type");
+
+        addCategory(inventory, 22, Material.CHEST,
+                "&e&lCHANGE AMOUNT", "&7Change how many are sold");
+
+        addCategory(inventory, 24, Material.GOLD_INGOT,
+                "&6&lCHANGE PRICE", "&7Change the purchase price");
+
+        addCategory(inventory, 31, Material.BARRIER,
+                "&c&lDELETE ITEM", "&7Permanently remove this item");
+
+        addCategory(inventory, 49, Material.ARROW,
+                "&c&lBACK", "&7Return to the item list");
+
+        player.openInventory(inventory);
+    }
+
+    private void beginPrompt(
+            Player player, String action, String category, String path
+    ) {
+        PendingEdit edit = new PendingEdit(action, category, path);
+        pendingEdits.put(player.getUniqueId(), edit);
+
+        player.closeInventory();
+
+        switch (action) {
+            case "add_material" ->
+                    player.sendMessage(color("&aEnter the new item's material name. Example: DIAMOND_BLOCK"));
+            case "edit_material" ->
+                    player.sendMessage(color("&aEnter the new material name. Example: DIAMOND_BLOCK"));
+            case "edit_amount" ->
+                    player.sendMessage(color("&aEnter the new item amount."));
+            case "edit_price" ->
+                    player.sendMessage(color("&aEnter the new price."));
+        }
+
+        player.sendMessage(color("&7Type &ccancel &7to stop."));
+    }
+
+    @EventHandler
+    public void onEditorChat(AsyncChatEvent event) {
+        Player player = event.getPlayer();
+        UUID id = player.getUniqueId();
+
+        PendingEdit edit = pendingEdits.get(id);
+        if (edit == null) return;
+
+        event.setCancelled(true);
+
+        String message = PlainTextComponentSerializer.plainText()
+                .serialize(event.message()).trim();
+
+        Bukkit.getScheduler().runTask(plugin, () -> {
+            if (!player.isOnline()) {
+                pendingEdits.remove(id);
+                return;
+            }
+
+            if (message.equalsIgnoreCase("cancel")) {
+                pendingEdits.remove(id);
+                player.sendMessage(color("&cShop edit cancelled."));
+                openEditorItems(player, edit.category);
+                return;
+            }
+
+            handleEditorInput(player, edit, message);
+        });
+    }
+
+    private void handleEditorInput(
+            Player player, PendingEdit edit, String message
+    ) {
+        if (!player.isOp()) {
+            pendingEdits.remove(player.getUniqueId());
+            return;
+        }
+
+        if (edit.action.equals("add_material")) {
+            Material material = Material.matchMaterial(message);
+
+            if (material == null || material.isAir()) {
+                player.sendMessage(color("&cInvalid material. Try again or type cancel."));
+                return;
+            }
+
+            edit.material = material;
+            edit.action = "add_amount";
+            player.sendMessage(color("&aEnter the amount to sell."));
+            return;
+        }
+
+        if (edit.action.equals("add_amount")) {
+            Integer amount = parseAmount(message, edit.material);
+
+            if (amount == null) {
+                player.sendMessage(color("&cInvalid amount. Enter a valid stack amount."));
+                return;
+            }
+
+            edit.amount = amount;
+            edit.action = "add_price";
+            player.sendMessage(color("&aEnter the item's price."));
+            return;
+        }
+
+        if (edit.action.equals("add_price")) {
+            Double price = parsePrice(message);
+
+            if (price == null) {
+                player.sendMessage(color("&cInvalid price. Enter a number above 0."));
+                return;
+            }
+
+            String key = edit.material.name().toLowerCase();
+            String path = getEditorItemsPath(edit.category) + "." + key;
+
+            if (plugin.getConfig().contains(path)) {
+                player.sendMessage(color("&cThat item already exists in this category."));
+                return;
+            }
+
+            plugin.getConfig().set(path + ".material", edit.material.name());
+            plugin.getConfig().set(path + ".amount", edit.amount);
+            plugin.getConfig().set(path + ".price", price);
+            plugin.saveConfig();
+
+            pendingEdits.remove(player.getUniqueId());
+
+            player.sendMessage(color("&aItem added and saved to config.yml!"));
+            openEditorItems(player, edit.category);
+            return;
+        }
+
+        if (edit.action.equals("edit_material")) {
+            Material material = Material.matchMaterial(message);
+
+            if (material == null || material.isAir()) {
+                player.sendMessage(color("&cInvalid material. Try again or type cancel."));
+                return;
+            }
+
+            int currentAmount = plugin.getConfig().getInt(
+                    edit.path + ".amount", 1
+            );
+
+            if (currentAmount > material.getMaxStackSize()) {
+                player.sendMessage(color("&cThe current amount is too large for that material."));
+                return;
+            }
+
+            plugin.getConfig().set(edit.path + ".material", material.name());
+            saveEdit(player, edit);
+            return;
+        }
+
+        if (edit.action.equals("edit_amount")) {
+            Material material = getMaterial(edit.path + ".material");
+            Integer amount = parseAmount(message, material);
+
+            if (amount == null) {
+                player.sendMessage(color("&cInvalid amount. Try again or type cancel."));
+                return;
+            }
+
+            plugin.getConfig().set(edit.path + ".amount", amount);
+            saveEdit(player, edit);
+            return;
+        }
+
+        if (edit.action.equals("edit_price")) {
+            Double price = parsePrice(message);
+
+            if (price == null) {
+                player.sendMessage(color("&cInvalid price. Try again or type cancel."));
+                return;
+            }
+
+            plugin.getConfig().set(edit.path + ".price", price);
+            saveEdit(player, edit);
+        }
+    }
+
+    private void saveEdit(Player player, PendingEdit edit) {
+        plugin.saveConfig();
+        pendingEdits.remove(player.getUniqueId());
+
+        player.sendMessage(color("&aShop item updated and saved!"));
+        openEditorItems(player, edit.category);
+    }
+
+    private Integer parseAmount(String message, Material material) {
+        if (material == null) return null;
+
+        try {
+            int amount = Integer.parseInt(message);
+
+            if (amount < 1 || amount > material.getMaxStackSize()) {
+                return null;
+            }
+
+            return amount;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private Double parsePrice(String message) {
+        try {
+            double price = Double.parseDouble(message);
+
+            if (!Double.isFinite(price) || price <= 0) {
+                return null;
+            }
+
+            return price;
+        } catch (NumberFormatException exception) {
+            return null;
+        }
+    }
+
+    private void deleteItem(Player player, MenuHolder holder) {
+        if (!player.isOp()) return;
+
+        plugin.getConfig().set(holder.selectedPath, null);
+        plugin.saveConfig();
+
+        player.sendMessage(color("&aItem deleted and config.yml saved!"));
+        openEditorItems(player, holder.category);
+    }
+
+    // ==========================================
+    //                CPVP SHOP
+    // ==========================================
+
     private void openCrystalShop(Player player) {
         MenuHolder holder = new MenuHolder("cpvp");
+
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lCRYSTAL PVP SHOP")
         );
+
         holder.setInventory(inventory);
 
         String base = "shop.categories.cpvp.loadout.";
@@ -217,11 +580,8 @@ public class ShopManager implements Listener {
     ) {
         if (!plugin.getConfig().contains(path + ".material")) return;
 
-        Material material = Material.matchMaterial(
-                plugin.getConfig().getString(path + ".material", "")
-        );
-
-        if (material == null || material.isAir()) return;
+        Material material = getMaterial(path + ".material");
+        if (material == null) return;
 
         int amount = plugin.getConfig().getInt(path + ".amount", 1);
         double price = plugin.getConfig().getDouble(path + ".price", 0);
@@ -237,11 +597,8 @@ public class ShopManager implements Listener {
     ) {
         String path = "shop.categories.cpvp.loadout." + configPath;
 
-        Material material = Material.matchMaterial(
-                plugin.getConfig().getString(path + ".material", fallback.name())
-        );
-
-        if (material == null || material.isAir()) material = fallback;
+        Material material = getMaterial(path + ".material");
+        if (material == null) material = fallback;
 
         int amount = plugin.getConfig().getInt(path + ".amount", defaultAmount);
         double price = plugin.getConfig().getDouble(path + ".price", defaultPrice);
@@ -250,13 +607,16 @@ public class ShopManager implements Listener {
                 material, amount, price, path);
     }
 
+    // ==========================================
+    //              SHOP ITEM DISPLAY
+    // ==========================================
+
     private void addShopItem(
             Inventory inventory, MenuHolder holder,
             int slot, Material material,
             int amount, double price, String path
     ) {
-        if (amount <= 0 || amount > material.getMaxStackSize()
-                || !Double.isFinite(price) || price <= 0) return;
+        if (!validItem(material, amount, price)) return;
 
         ItemStack item = createEnchantedItem(material, amount);
         ItemMeta meta = item.getItemMeta();
@@ -316,6 +676,10 @@ public class ShopManager implements Listener {
         item.setItemMeta(meta);
     }
 
+    // ==========================================
+    //                 PURCHASES
+    // ==========================================
+
     private boolean hasInventorySpace(Player player, List<ItemStack> items) {
         Inventory temporary = Bukkit.createInventory(null, 36);
         temporary.setContents(player.getInventory().getStorageContents());
@@ -370,7 +734,7 @@ public class ShopManager implements Listener {
         }
 
         double total = 0;
-        List<ItemStack> items = new java.util.ArrayList<>();
+        List<ItemStack> items = new ArrayList<>();
 
         for (ShopEntry entry : holder.entries.values()) {
             total += entry.price;
@@ -412,6 +776,10 @@ public class ShopManager implements Listener {
         ));
     }
 
+    // ==========================================
+    //                 GUI HELPERS
+    // ==========================================
+
     private void addCategory(
             Inventory inventory, int slot,
             Material material, String name, String description
@@ -429,6 +797,36 @@ public class ShopManager implements Listener {
         inventory.setItem(slot, item);
     }
 
+    private Material getMaterial(String path) {
+        return Material.matchMaterial(
+                plugin.getConfig().getString(path, "")
+        );
+    }
+
+    private boolean validItem(Material material, int amount, double price) {
+        return material != null
+                && !material.isAir()
+                && amount > 0
+                && amount <= material.getMaxStackSize()
+                && Double.isFinite(price)
+                && price > 0;
+    }
+
+    private int validSize(int size) {
+        if (size < 9 || size > 54 || size % 9 != 0) {
+            return 54;
+        }
+        return size;
+    }
+
+    private String color(String text) {
+        return ChatColor.translateAlternateColorCodes('&', text);
+    }
+
+    // ==========================================
+    //                CLICK HANDLER
+    // ==========================================
+
     @EventHandler
     public void onShopClick(InventoryClickEvent event) {
         if (!(event.getInventory().getHolder() instanceof MenuHolder holder)) {
@@ -443,71 +841,120 @@ public class ShopManager implements Listener {
 
         if (slot < 0 || slot >= event.getInventory().getSize()) return;
 
-        if (holder.type.equals("editor")) {
-            if (!player.isOp()) {
-                player.closeInventory();
-                return;
+        switch (holder.type) {
+            case "main" -> {
+                if (slot == 8 && player.isOp()) {
+                    openEditorMenu(player);
+                    return;
+                }
+
+                String category = categories.get(slot);
+                if (category == null) return;
+
+                if (category.equals("shard_shop")) {
+                    plugin.getShardShopManager().openShop(player);
+                } else if (category.equals("cpvp")) {
+                    openCrystalShop(player);
+                } else {
+                    openCategory(player, category);
+                }
             }
 
-            if (slot == 49) {
-                openMainMenu(player);
-            } else {
-                player.sendMessage(color(
-                        "&eThe shop editor is not implemented yet."
-                ));
-            }
-            return;
-        }
+            case "category" -> {
+                if (slot == event.getInventory().getSize() - 5) {
+                    openMainMenu(player);
+                    return;
+                }
 
-        if (holder.type.equals("category")) {
-            if (slot == 49) {
-                openMainMenu(player);
-                return;
+                ShopEntry entry = holder.entries.get(slot);
+                if (entry != null) purchase(player, entry);
             }
 
-            ShopEntry entry = holder.entries.get(slot);
-            if (entry != null) purchase(player, entry);
-            return;
-        }
+            case "cpvp" -> {
+                if (slot == 45) {
+                    openMainMenu(player);
+                    return;
+                }
 
-        if (holder.type.equals("cpvp")) {
-            if (slot == 45) {
-                openMainMenu(player);
-                return;
+                if (slot == 49) {
+                    purchaseFullLoadout(player, holder);
+                    return;
+                }
+
+                ShopEntry entry = holder.entries.get(slot);
+                if (entry != null) purchase(player, entry);
             }
 
-            if (slot == 49) {
-                purchaseFullLoadout(player, holder);
-                return;
+            case "editor" -> {
+                if (!player.isOp()) {
+                    player.closeInventory();
+                    return;
+                }
+
+                if (slot == 49) {
+                    openMainMenu(player);
+                    return;
+                }
+
+                String category = editorCategories.get(slot);
+                if (category != null) {
+                    openEditorItems(player, category);
+                }
             }
 
-            ShopEntry entry = holder.entries.get(slot);
-            if (entry != null) purchase(player, entry);
-            return;
-        }
+            case "editor_items" -> {
+                if (!player.isOp()) {
+                    player.closeInventory();
+                    return;
+                }
 
-        if (holder.type.equals("main")) {
-            if (slot == 8 && player.isOp()) {
-                openEditorMenu(player);
-                return;
+                if (slot == 49) {
+                    openEditorMenu(player);
+                    return;
+                }
+
+                if (slot == 45) {
+                    beginPrompt(player, "add_material",
+                            holder.category, null);
+                    return;
+                }
+
+                ShopEntry entry = holder.entries.get(slot);
+                if (entry != null) {
+                    openItemEditor(player, holder.category, entry);
+                }
             }
 
-            String category = categories.get(slot);
-            if (category == null) return;
+            case "editor_item" -> {
+                if (!player.isOp()) {
+                    player.closeInventory();
+                    return;
+                }
 
-            if (category.equals("shard_shop")) {
-                plugin.getShardShopManager().openShop(player);
-            } else if (category.equals("cpvp")) {
-                openCrystalShop(player);
-            } else {
-                openCategory(player, category);
+                if (slot == 49) {
+                    openEditorItems(player, holder.category);
+                    return;
+                }
+
+                if (slot == 20) {
+                    beginPrompt(player, "edit_material",
+                            holder.category, holder.selectedPath);
+                } else if (slot == 22) {
+                    beginPrompt(player, "edit_amount",
+                            holder.category, holder.selectedPath);
+                } else if (slot == 24) {
+                    beginPrompt(player, "edit_price",
+                            holder.category, holder.selectedPath);
+                } else if (slot == 31) {
+                    deleteItem(player, holder);
+                }
             }
         }
     }
 
-    private String color(String text) {
-        return ChatColor.translateAlternateColorCodes('&', text);
-    }
+    // ==========================================
+    //                  HOLDERS
+    // ==========================================
 
     private static class ShopEntry {
         private final Material material;
@@ -523,10 +970,25 @@ public class ShopManager implements Listener {
         }
     }
 
+    private static class PendingEdit {
+        private String action;
+        private final String category;
+        private final String path;
+        private Material material;
+        private int amount;
+
+        PendingEdit(String action, String category, String path) {
+            this.action = action;
+            this.category = category;
+            this.path = path;
+        }
+    }
+
     private static class MenuHolder implements InventoryHolder {
         private final String type;
         private final Map<Integer, ShopEntry> entries = new LinkedHashMap<>();
         private String category;
+        private String selectedPath;
         private Inventory inventory;
 
         MenuHolder(String type) {
