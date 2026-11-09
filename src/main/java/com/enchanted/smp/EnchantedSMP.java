@@ -15,6 +15,7 @@ public class EnchantedSMP extends JavaPlugin {
     private ShopManager shopManager;
     private ShardManager shardManager;
     private ShardShopManager shardShopManager;
+    private AuctionHouseManager auctionHouseManager;
 
     @Override
     public void onEnable() {
@@ -29,6 +30,7 @@ public class EnchantedSMP extends JavaPlugin {
         shardManager = new ShardManager(this);
         shardShopManager = new ShardShopManager(this);
         shopManager = new ShopManager(this);
+        auctionHouseManager = new AuctionHouseManager(this);
 
         getCommand("shop").setExecutor((sender, command, label, args) -> {
             if (!(sender instanceof Player player)) {
@@ -127,6 +129,46 @@ public class EnchantedSMP extends JavaPlugin {
             return true;
         });
 
+        getCommand("ah").setExecutor((sender, command, label, args) -> {
+
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("Only players can use this command.");
+                return true;
+            }
+
+            if (args.length == 0) {
+                auctionHouseManager.openAuctionHouse(player);
+                return true;
+            }
+
+            if (args[0].equalsIgnoreCase("sell")) {
+
+                if (args.length != 2) {
+                    player.sendMessage(color("&cUsage: /ah sell <price>"));
+                    return true;
+                }
+
+                double price;
+
+                try {
+                    price = Double.parseDouble(args[1]);
+
+                    if (!Double.isFinite(price) || price <= 0) {
+                        throw new NumberFormatException();
+                    }
+                } catch (NumberFormatException e) {
+                    player.sendMessage(color("&cEnter a valid price."));
+                    return true;
+                }
+
+                auctionHouseManager.listItem(player, price);
+                return true;
+            }
+
+            player.sendMessage(color("&cUsage: /ah or /ah sell <price>"));
+            return true;
+        });
+
         getLogger().info("EnchantedSMP enabled successfully!");
     }
 
@@ -165,10 +207,18 @@ public class EnchantedSMP extends JavaPlugin {
         return shardShopManager;
     }
 
+    public AuctionHouseManager getAuctionHouseManager() {
+        return auctionHouseManager;
+    }
+
     @Override
     public void onDisable() {
         if (shardManager != null) {
             shardManager.save();
+        }
+
+        if (auctionHouseManager != null) {
+            auctionHouseManager.save();
         }
     }
 }
