@@ -5,7 +5,6 @@ import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -15,6 +14,7 @@ public class EnchantedSMP extends JavaPlugin {
     private Economy economy;
     private ShopManager shopManager;
     private ShardManager shardManager;
+    private ShardShopManager shardShopManager;
 
     @Override
     public void onEnable() {
@@ -27,6 +27,7 @@ public class EnchantedSMP extends JavaPlugin {
         }
 
         shardManager = new ShardManager(this);
+        shardShopManager = new ShardShopManager(this);
         shopManager = new ShopManager(this);
 
         getCommand("shop").setExecutor((sender, command, label, args) -> {
@@ -113,7 +114,7 @@ public class EnchantedSMP extends JavaPlugin {
             sender.sendMessage(color(
                     "&5&lENCHANTEDSMP &8» &dSuccessfully "
                             + action + " &f" + amount
-                            + " &dshards to &f" + target.getName() + "&d."
+                            + " &dshards for &f" + target.getName() + "&d."
             ));
 
             if (target.isOnline()) {
@@ -158,6 +159,10 @@ public class EnchantedSMP extends JavaPlugin {
 
     public ShardManager getShardManager() {
         return shardManager;
+    }
+
+    public ShardShopManager getShardShopManager() {
+        return shardShopManager;
     }
 
     @Override
