@@ -1,7 +1,6 @@
 
 package com.enchanted.smp;
 
-import org.bukkit.Bukkit;
 import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -14,78 +13,67 @@ import java.util.UUID;
 
 public class FirstJoinManager implements Listener {
 
+    private static final double STARTING_MONEY = 300000;
+    private static final double STARTING_SHARDS = 0;
+
     private final EnchantedSMP plugin;
     private final File file;
     private final YamlConfiguration data;
 
-    private static final double STARTING_MONEY = 300000;
-    private static final double STARTING_SHARDS = 0;
-
     public FirstJoinManager(EnchantedSMP plugin) {
         this.plugin = plugin;
 
-        file = new File(plugin.getDataFolder(), "first-join.yml");
+        this.file = new File(plugin.getDataFolder(), "first-join.yml");
+        this.data = YamlConfiguration.loadConfiguration(file);
 
-        if (!file.exists()) {
-            try {
-                plugin.getDataFolder().mkdirs();
-                file.createNewFile();
-            } catch (IOException e) {
-                plugin.getLogger().severe(
-                        "Could not create first-join.yml!"
-                );
-            }
-        }
-
-        data = YamlConfiguration.loadConfiguration(file);
-
-        Bukkit.getPluginManager().registerEvents(this, plugin);
+        plugin.getServer().getPluginManager().registerEvents(this, plugin);
     }
 
     @EventHandler
     public void onFirstJoin(PlayerJoinEvent event) {
         Player player = event.getPlayer();
-
         UUID uuid = player.getUniqueId();
-        String path = "players." + uuid;
 
-        if (data.getBoolean(path + ".received", false)) {
+        String path = "players." + uuid + ".received";
+
+        if (data.getBoolean(path, false)) {
             return;
         }
 
         if (plugin.getEconomy() == null) {
             plugin.getLogger().warning(
-                    "Could not give starting money to "
-                            + player.getName()
-                            + ": Vault economy unavailable."
+                "Vault economy is unavailable. Starting money was not given to "
+                + player.getName()
             );
             return;
         }
 
-        plugin.getEconomy().setBalance(player, STARTING_MONEY);
+        double currentBalance = plugin.getEconomy().getBalance(player);
 
-        plugin.getShardManager().setShards(
-                player,
-                STARTING_SHARDS
-        );
+        if (currentBalance > 0) {
+            plugin.getEconomy().withdrawPlayer(player, currentBalance);
+        }
 
-        data.set(path + ".received", true);
+        plugin.getEconomy().depositPlayer(player, STARTING_MONEY);
+
+        plugin.getShardManager().setShards(player, STARTING_SHARDS);
+
+        data.set(path, true);
         save();
 
         player.sendMessage(
-                plugin.getServer().getConsoleSender().getName().isEmpty()
-                        ? "Welcome to EnchantedSMP!"
-                        : "§5§lENCHANTEDSMP §8» §aWelcome! §fYou received §6$300,000 §aand §d0 Shards§a!"
+            "§5§lENCHANTEDSMP §8» §aWelcome! §fYou received §6$300,000 §aand §d0 Shards§a!"
         );
     }
 
     public void save() {
         try {
             data.save(file);
-        } catch (IOException e) {
+        } catch (IOException exception) {
             plugin.getLogger().severe(
-                    "Could not save first-join data!"
+                "Could not save first-join.yml!"
             );
+            exception.printStackTrace();
         }
     }
 }
