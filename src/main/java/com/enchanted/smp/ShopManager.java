@@ -44,6 +44,7 @@ public class ShopManager implements Listener {
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lENCHANTEDSMP SHOP")
         );
+
         holder.setInventory(inventory);
 
         addCategory(inventory, 10, Material.BRICKS,
@@ -71,9 +72,8 @@ public class ShopManager implements Listener {
                 "&a&lFARMING", "&7Farming supplies");
 
         addCategory(inventory, 31, Material.AMETHYST_SHARD,
-                "&d&lSHARD SHOP", "&7Spend your shards");
+                "&d&lSHARD SHOP", "&7Buy mob spawners with shards");
 
-        // OP-only editor button in the top-right corner
         if (player.isOp()) {
             addCategory(inventory, 8, Material.ENCHANTED_BOOK,
                     "&d&lSHOP EDITOR", "&7Click to edit the shop");
@@ -93,6 +93,7 @@ public class ShopManager implements Listener {
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lSHOP EDITOR")
         );
+
         holder.setInventory(inventory);
 
         addCategory(inventory, 20, Material.CHEST,
@@ -121,6 +122,7 @@ public class ShopManager implements Listener {
         ItemMeta meta = item.getItemMeta();
 
         meta.setDisplayName(color(name));
+
         meta.setLore(List.of(
                 color(description),
                 color("&7Click to open!")
@@ -161,6 +163,7 @@ public class ShopManager implements Listener {
                         "&dShop editor tools will be added next!"
                 ));
             }
+
             return;
         }
 
@@ -173,13 +176,20 @@ public class ShopManager implements Listener {
 
         String category = categories.get(slot);
 
-        if (category != null) {
-            player.sendMessage(color(
-                    "&5&lEnchantedSMP &8» &d" +
-                    category.replace("_", " ") +
-                    " shop is coming next!"
-            ));
+        if (category == null) {
+            return;
         }
+
+        if (category.equals("shard_shop")) {
+            plugin.getShardShopManager().openShop(player);
+            return;
+        }
+
+        player.sendMessage(color(
+                "&5&lEnchantedSMP &8» &d"
+                        + category.replace("_", " ")
+                        + " shop is coming next!"
+        ));
     }
 
     private String color(String text) {
@@ -187,6 +197,7 @@ public class ShopManager implements Listener {
     }
 
     private static class MenuHolder implements InventoryHolder {
+
         private final boolean editor;
         private Inventory inventory;
 
