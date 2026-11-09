@@ -6,6 +6,7 @@ import org.bukkit.ChatColor;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.Registry;
+import org.bukkit.configuration.ConfigurationSection;
 import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -47,43 +48,88 @@ public class ShopManager implements Listener {
 
     public void openMainMenu(Player player) {
         MenuHolder holder = new MenuHolder("main");
-
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lENCHANTEDSMP SHOP")
         );
-
         holder.setInventory(inventory);
 
         addCategory(inventory, 10, Material.BRICKS,
                 "&6&lBUILDING", "&7Building supplies");
-
         addCategory(inventory, 12, Material.REDSTONE,
                 "&c&lREDSTONE", "&7Redstone components");
-
         addCategory(inventory, 14, Material.TRIPWIRE_HOOK,
                 "&4&lTRAPS", "&7Trap supplies");
-
         addCategory(inventory, 16, Material.ENDER_PEARL,
                 "&5&lEND", "&7End supplies");
-
         addCategory(inventory, 19, Material.BLAZE_ROD,
                 "&6&lNETHER", "&7Nether supplies");
-
         addCategory(inventory, 21, Material.END_CRYSTAL,
                 "&d&lCRYSTAL PVP", "&7CPvP equipment and loadouts");
-
         addCategory(inventory, 23, Material.GUNPOWDER,
                 "&8&lMOB DROPS", "&7Useful mob drops");
-
         addCategory(inventory, 25, Material.SUGAR_CANE,
                 "&a&lFARMING", "&7Farming supplies");
-
         addCategory(inventory, 31, Material.AMETHYST_SHARD,
                 "&d&lSHARD SHOP", "&7Buy mob spawners with shards");
 
         if (player.isOp()) {
             addCategory(inventory, 8, Material.ENCHANTED_BOOK,
                     "&d&lSHOP EDITOR", "&7Click to edit the shop");
+        }
+
+        player.openInventory(inventory);
+    }
+
+    private void openCategory(Player player, String category) {
+        String path = "shop.categories." + category + ".items";
+        ConfigurationSection section =
+                plugin.getConfig().getConfigurationSection(path);
+
+        if (section == null) {
+            player.sendMessage(color("&cNo items are configured for this category."));
+            return;
+        }
+
+        MenuHolder holder = new MenuHolder("category");
+        holder.category = category;
+
+        Inventory inventory = Bukkit.createInventory(
+                holder, 54,
+                color("&5&l" + category.replace("_", " ").toUpperCase())
+        );
+        holder.setInventory(inventory);
+
+        int slot = 0;
+
+        for (String key : section.getKeys(false)) {
+            if (slot >= 45) break;
+
+            String itemPath = path + "." + key;
+
+            Material material = Material.matchMaterial(
+                    plugin.getConfig().getString(itemPath + ".material", "")
+            );
+
+            if (material == null || material.isAir()) continue;
+
+            int amount = plugin.getConfig().getInt(itemPath + ".amount", 1);
+            double price = plugin.getConfig().getDouble(itemPath + ".price", 0);
+
+            if (amount <= 0 || amount > material.getMaxStackSize()
+                    || !Double.isFinite(price) || price <= 0) {
+                continue;
+            }
+
+            addShopItem(inventory, holder, slot,
+                    material, amount, price, itemPath);
+            slot++;
+        }
+
+        addCategory(inventory, 49, Material.ARROW,
+                "&c&lBACK", "&7Return to the main shop");
+
+        if (slot == 0) {
+            player.sendMessage(color("&cThis category has no valid items in config.yml."));
         }
 
         player.openInventory(inventory);
@@ -96,22 +142,17 @@ public class ShopManager implements Listener {
         }
 
         MenuHolder holder = new MenuHolder("editor");
-
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lSHOP EDITOR")
         );
-
         holder.setInventory(inventory);
 
         addCategory(inventory, 20, Material.CHEST,
                 "&a&lEDIT CATEGORIES", "&7Manage shop categories");
-
         addCategory(inventory, 22, Material.DIAMOND_SWORD,
                 "&b&lEDIT ITEMS", "&7Manage shop items");
-
         addCategory(inventory, 24, Material.GOLD_INGOT,
                 "&6&lEDIT PRICES", "&7Change item prices");
-
         addCategory(inventory, 49, Material.ARROW,
                 "&c&lBACK", "&7Return to the shop");
 
@@ -120,50 +161,38 @@ public class ShopManager implements Listener {
 
     private void openCrystalShop(Player player) {
         MenuHolder holder = new MenuHolder("cpvp");
-
         Inventory inventory = Bukkit.createInventory(
                 holder, 54, color("&5&lCRYSTAL PVP SHOP")
         );
-
         holder.setInventory(inventory);
 
         String base = "shop.categories.cpvp.loadout.";
 
         String[] armor = {
-                "armor.helmet",
-                "armor.chestplate",
-                "armor.leggings",
-                "armor.boots"
+                "armor.helmet", "armor.chestplate",
+                "armor.leggings", "armor.boots"
         };
 
         int[] armorSlots = {10, 12, 14, 16};
 
         for (int i = 0; i < armor.length; i++) {
-            addConfiguredItem(
-                    inventory, holder, armorSlots[i],
-                    base + armor[i]
-            );
+            addConfiguredItem(inventory, holder,
+                    armorSlots[i], base + armor[i]);
         }
 
         String[] items = {
-                "items.end_crystal",
-                "items.obsidian",
-                "items.totem",
-                "items.ender_pearl",
-                "items.golden_apple",
-                "items.experience_bottle"
+                "items.end_crystal", "items.obsidian",
+                "items.totem", "items.ender_pearl",
+                "items.golden_apple", "items.experience_bottle"
         };
 
         int[] itemSlots = {19, 21, 23, 25, 28, 30};
 
         for (int i = 0; i < items.length; i++) {
-            addConfiguredItem(
-                    inventory, holder, itemSlots[i],
-                    base + items[i]
-            );
+            addConfiguredItem(inventory, holder,
+                    itemSlots[i], base + items[i]);
         }
 
-        // Extra CPvP weapons with editable config prices.
         addExtraItem(inventory, holder, 32,
                 "items.netherite_sword",
                 Material.NETHERITE_SWORD, 1, 10000);
@@ -183,22 +212,16 @@ public class ShopManager implements Listener {
     }
 
     private void addConfiguredItem(
-            Inventory inventory,
-            MenuHolder holder,
-            int slot,
-            String path
+            Inventory inventory, MenuHolder holder,
+            int slot, String path
     ) {
-        if (!plugin.getConfig().contains(path + ".material")) {
-            return;
-        }
+        if (!plugin.getConfig().contains(path + ".material")) return;
 
         Material material = Material.matchMaterial(
                 plugin.getConfig().getString(path + ".material", "")
         );
 
-        if (material == null || material.isAir()) {
-            return;
-        }
+        if (material == null || material.isAir()) return;
 
         int amount = plugin.getConfig().getInt(path + ".amount", 1);
         double price = plugin.getConfig().getDouble(path + ".price", 0);
@@ -208,58 +231,39 @@ public class ShopManager implements Listener {
     }
 
     private void addExtraItem(
-            Inventory inventory,
-            MenuHolder holder,
-            int slot,
-            String configPath,
-            Material defaultMaterial,
-            int defaultAmount,
-            double defaultPrice
+            Inventory inventory, MenuHolder holder,
+            int slot, String configPath,
+            Material fallback, int defaultAmount, double defaultPrice
     ) {
         String path = "shop.categories.cpvp.loadout." + configPath;
 
         Material material = Material.matchMaterial(
-                plugin.getConfig().getString(
-                        path + ".material", defaultMaterial.name()
-                )
+                plugin.getConfig().getString(path + ".material", fallback.name())
         );
 
-        if (material == null || material.isAir()) {
-            material = defaultMaterial;
-        }
+        if (material == null || material.isAir()) material = fallback;
 
-        int amount = plugin.getConfig().getInt(
-                path + ".amount", defaultAmount
-        );
-
-        double price = plugin.getConfig().getDouble(
-                path + ".price", defaultPrice
-        );
+        int amount = plugin.getConfig().getInt(path + ".amount", defaultAmount);
+        double price = plugin.getConfig().getDouble(path + ".price", defaultPrice);
 
         addShopItem(inventory, holder, slot,
                 material, amount, price, path);
     }
 
     private void addShopItem(
-            Inventory inventory,
-            MenuHolder holder,
-            int slot,
-            Material material,
-            int amount,
-            double price,
-            String path
+            Inventory inventory, MenuHolder holder,
+            int slot, Material material,
+            int amount, double price, String path
     ) {
         if (amount <= 0 || amount > material.getMaxStackSize()
-                || !Double.isFinite(price) || price <= 0) {
-            return;
-        }
+                || !Double.isFinite(price) || price <= 0) return;
 
         ItemStack item = createEnchantedItem(material, amount);
         ItemMeta meta = item.getItemMeta();
 
         meta.setLore(List.of(
                 color("&7Amount: &f" + amount),
-                color("&7Price: &a$" + String.format("%.0f", price)),
+                color("&7Price: &a$" + String.format("%.2f", price)),
                 color("&eClick to purchase!")
         ));
 
@@ -273,11 +277,10 @@ public class ShopManager implements Listener {
     private ItemStack createEnchantedItem(Material material, int amount) {
         ItemStack item = new ItemStack(material, amount);
 
-        if (material.name().contains("NETHERITE_HELMET")
-                || material.name().contains("NETHERITE_CHESTPLATE")
-                || material.name().contains("NETHERITE_LEGGINGS")
-                || material.name().contains("NETHERITE_BOOTS")) {
-
+        if (material == Material.NETHERITE_HELMET
+                || material == Material.NETHERITE_CHESTPLATE
+                || material == Material.NETHERITE_LEGGINGS
+                || material == Material.NETHERITE_BOOTS) {
             enchant(item, "protection", 4);
             enchant(item, "unbreaking", 3);
             enchant(item, "mending", 1);
@@ -306,13 +309,24 @@ public class ShopManager implements Listener {
                 NamespacedKey.minecraft(name)
         );
 
-        if (enchantment == null) {
-            return;
-        }
+        if (enchantment == null) return;
 
         ItemMeta meta = item.getItemMeta();
         meta.addEnchant(enchantment, level, true);
         item.setItemMeta(meta);
+    }
+
+    private boolean hasInventorySpace(Player player, List<ItemStack> items) {
+        Inventory temporary = Bukkit.createInventory(null, 36);
+        temporary.setContents(player.getInventory().getStorageContents());
+
+        for (ItemStack item : items) {
+            if (!temporary.addItem(item.clone()).isEmpty()) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private void purchase(Player player, ShopEntry entry) {
@@ -321,15 +335,9 @@ public class ShopManager implements Listener {
             return;
         }
 
-        ItemStack item = createEnchantedItem(
-                entry.material, entry.amount
-        );
+        ItemStack item = createEnchantedItem(entry.material, entry.amount);
 
-        // Check inventory space before charging.
-        Inventory temporary = Bukkit.createInventory(null, 36);
-        temporary.setContents(player.getInventory().getStorageContents());
-
-        if (!temporary.addItem(item.clone()).isEmpty()) {
+        if (!hasInventorySpace(player, List.of(item))) {
             player.sendMessage(color("&cYour inventory is full!"));
             return;
         }
@@ -339,9 +347,7 @@ public class ShopManager implements Listener {
             return;
         }
 
-        var response = plugin.getEconomy().withdrawPlayer(
-                player, entry.price
-        );
+        var response = plugin.getEconomy().withdrawPlayer(player, entry.price);
 
         if (!response.transactionSuccess()) {
             player.sendMessage(color("&cPayment failed!"));
@@ -352,9 +358,8 @@ public class ShopManager implements Listener {
 
         player.sendMessage(color(
                 "&5&lENCHANTEDSMP &8» &aPurchased "
-                        + entry.amount + "x "
-                        + entry.material.name()
-                        + " for $" + String.format("%.0f", entry.price)
+                        + entry.amount + "x " + entry.material.name()
+                        + " for $" + String.format("%.2f", entry.price)
         ));
     }
 
@@ -365,31 +370,26 @@ public class ShopManager implements Listener {
         }
 
         double total = 0;
-        Inventory temporary = Bukkit.createInventory(null, 36);
-
-        temporary.setContents(player.getInventory().getStorageContents());
+        List<ItemStack> items = new java.util.ArrayList<>();
 
         for (ShopEntry entry : holder.entries.values()) {
             total += entry.price;
-
-            ItemStack item = createEnchantedItem(
-                    entry.material, entry.amount
-            );
-
-            if (!temporary.addItem(item).isEmpty()) {
-                player.sendMessage(color("&cYour inventory is too full!"));
-                return;
-            }
+            items.add(createEnchantedItem(entry.material, entry.amount));
         }
 
-        if (!Double.isFinite(total)) {
-            player.sendMessage(color("&cInvalid loadout price."));
+        if (!Double.isFinite(total) || items.isEmpty()) {
+            player.sendMessage(color("&cThe loadout is not configured correctly."));
+            return;
+        }
+
+        if (!hasInventorySpace(player, items)) {
+            player.sendMessage(color("&cYour inventory is too full!"));
             return;
         }
 
         if (plugin.getEconomy().getBalance(player) < total) {
             player.sendMessage(color(
-                    "&cYou need $" + String.format("%.0f", total)
+                    "&cYou need $" + String.format("%.2f", total)
                             + " to buy the full loadout!"
             ));
             return;
@@ -402,24 +402,19 @@ public class ShopManager implements Listener {
             return;
         }
 
-        for (ShopEntry entry : holder.entries.values()) {
-            player.getInventory().addItem(
-                    createEnchantedItem(entry.material, entry.amount)
-            );
+        for (ItemStack item : items) {
+            player.getInventory().addItem(item);
         }
 
         player.sendMessage(color(
                 "&5&lENCHANTEDSMP &8» &aFull CPvP loadout purchased for $"
-                        + String.format("%.0f", total) + "!"
+                        + String.format("%.2f", total) + "!"
         ));
     }
 
     private void addCategory(
-            Inventory inventory,
-            int slot,
-            Material material,
-            String name,
-            String description
+            Inventory inventory, int slot,
+            Material material, String name, String description
     ) {
         ItemStack item = new ItemStack(material);
         ItemMeta meta = item.getItemMeta();
@@ -436,22 +431,17 @@ public class ShopManager implements Listener {
 
     @EventHandler
     public void onShopClick(InventoryClickEvent event) {
-        if (!(event.getInventory().getHolder()
-                instanceof MenuHolder holder)) {
+        if (!(event.getInventory().getHolder() instanceof MenuHolder holder)) {
             return;
         }
 
         event.setCancelled(true);
 
-        if (!(event.getWhoClicked() instanceof Player player)) {
-            return;
-        }
+        if (!(event.getWhoClicked() instanceof Player player)) return;
 
         int slot = event.getRawSlot();
 
-        if (slot < 0 || slot >= event.getInventory().getSize()) {
-            return;
-        }
+        if (slot < 0 || slot >= event.getInventory().getSize()) return;
 
         if (holder.type.equals("editor")) {
             if (!player.isOp()) {
@@ -463,9 +453,20 @@ public class ShopManager implements Listener {
                 openMainMenu(player);
             } else {
                 player.sendMessage(color(
-                        "&dShop editor tools will be added next!"
+                        "&eThe shop editor is not implemented yet."
                 ));
             }
+            return;
+        }
+
+        if (holder.type.equals("category")) {
+            if (slot == 49) {
+                openMainMenu(player);
+                return;
+            }
+
+            ShopEntry entry = holder.entries.get(slot);
+            if (entry != null) purchase(player, entry);
             return;
         }
 
@@ -481,39 +482,27 @@ public class ShopManager implements Listener {
             }
 
             ShopEntry entry = holder.entries.get(slot);
+            if (entry != null) purchase(player, entry);
+            return;
+        }
 
-            if (entry != null) {
-                purchase(player, entry);
+        if (holder.type.equals("main")) {
+            if (slot == 8 && player.isOp()) {
+                openEditorMenu(player);
+                return;
             }
-            return;
+
+            String category = categories.get(slot);
+            if (category == null) return;
+
+            if (category.equals("shard_shop")) {
+                plugin.getShardShopManager().openShop(player);
+            } else if (category.equals("cpvp")) {
+                openCrystalShop(player);
+            } else {
+                openCategory(player, category);
+            }
         }
-
-        if (slot == 8 && player.isOp()) {
-            openEditorMenu(player);
-            return;
-        }
-
-        String category = categories.get(slot);
-
-        if (category == null) {
-            return;
-        }
-
-        if (category.equals("shard_shop")) {
-            plugin.getShardShopManager().openShop(player);
-            return;
-        }
-
-        if (category.equals("cpvp")) {
-            openCrystalShop(player);
-            return;
-        }
-
-        player.sendMessage(color(
-                "&5&lENCHANTEDSMP &8» &d"
-                        + category.replace("_", " ")
-                        + " shop will be added next!"
-        ));
     }
 
     private String color(String text) {
@@ -537,6 +526,7 @@ public class ShopManager implements Listener {
     private static class MenuHolder implements InventoryHolder {
         private final String type;
         private final Map<Integer, ShopEntry> entries = new LinkedHashMap<>();
+        private String category;
         private Inventory inventory;
 
         MenuHolder(String type) {
