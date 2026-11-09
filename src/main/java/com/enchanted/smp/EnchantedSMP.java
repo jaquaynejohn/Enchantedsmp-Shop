@@ -1,7 +1,6 @@
 
 package com.enchanted.smp;
 
-import me.clip.placeholderapi.PlaceholderAPIPlugin;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -24,16 +23,21 @@ public class EnchantedSMP extends JavaPlugin {
     private OrderManager orderManager;
     private SpawnerManager spawnerManager;
     private KitManager kitManager;
+    private FirstJoinManager firstJoinManager;
 
     @Override
     public void onEnable() {
         saveDefaultConfig();
 
         if (!setupEconomy()) {
-            getLogger().severe("Vault economy not found! Economy features may not work.");
+            getLogger().severe(
+                    "Vault economy not found! Economy features may not work."
+            );
         }
 
         shardManager = new ShardManager(this);
+        firstJoinManager = new FirstJoinManager(this);
+
         shardShopManager = new ShardShopManager(this);
         spawnerManager = new SpawnerManager(this);
         shopManager = new ShopManager(this);
@@ -45,7 +49,9 @@ public class EnchantedSMP extends JavaPlugin {
             new ShardPlaceholderExpansion(this).register();
             getLogger().info("Shard placeholders registered!");
         } else {
-            getLogger().warning("PlaceholderAPI not found! Shard placeholders disabled.");
+            getLogger().warning(
+                    "PlaceholderAPI not found! Shard placeholders disabled."
+            );
         }
 
         getLogger().info("EnchantedSMP has been enabled!");
@@ -152,7 +158,9 @@ public class EnchantedSMP extends JavaPlugin {
 
             case "take":
                 if (!shardManager.takeShards(target, amount)) {
-                    player.sendMessage(color("&cThe player does not have enough shards."));
+                    player.sendMessage(color(
+                            "&cThe player does not have enough shards."
+                    ));
                     return;
                 }
                 break;
@@ -307,6 +315,7 @@ public class EnchantedSMP extends JavaPlugin {
     @Override
     public void onDisable() {
         if (shardManager != null) shardManager.save();
+        if (firstJoinManager != null) firstJoinManager.save();
         if (auctionHouseManager != null) auctionHouseManager.save();
         if (orderManager != null) orderManager.save();
         if (spawnerManager != null) spawnerManager.saveSpawners();
