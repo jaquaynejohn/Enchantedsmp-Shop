@@ -4,6 +4,7 @@ package com.enchanted.smp;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.Material;
 import org.bukkit.OfflinePlayer;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -16,6 +17,7 @@ public class EnchantedSMP extends JavaPlugin {
     private ShardManager shardManager;
     private ShardShopManager shardShopManager;
     private AuctionHouseManager auctionHouseManager;
+    private OrderManager orderManager;
 
     @Override
     public void onEnable() {
@@ -31,6 +33,7 @@ public class EnchantedSMP extends JavaPlugin {
         shardShopManager = new ShardShopManager(this);
         shopManager = new ShopManager(this);
         auctionHouseManager = new AuctionHouseManager(this);
+        orderManager = new OrderManager(this);
 
         getCommand("shop").setExecutor((sender, command, label, args) -> {
             if (!(sender instanceof Player player)) {
@@ -142,7 +145,6 @@ public class EnchantedSMP extends JavaPlugin {
             }
 
             if (args[0].equalsIgnoreCase("sell")) {
-
                 if (args.length != 2) {
                     player.sendMessage(color("&cUsage: /ah sell <price>"));
                     return true;
@@ -166,6 +168,61 @@ public class EnchantedSMP extends JavaPlugin {
             }
 
             player.sendMessage(color("&cUsage: /ah or /ah sell <price>"));
+            return true;
+        });
+
+        getCommand("order").setExecutor((sender, command, label, args) -> {
+
+            if (!(sender instanceof Player player)) {
+                sender.sendMessage("Only players can use this command.");
+                return true;
+            }
+
+            if (args.length == 0) {
+                orderManager.openOrders(player);
+                return true;
+            }
+
+            if (args[0].equalsIgnoreCase("create")) {
+
+                if (args.length != 4) {
+                    player.sendMessage(color(
+                            "&cUsage: /order create <item> <amount> <reward>"
+                    ));
+                    return true;
+                }
+
+                Material material = Material.matchMaterial(args[1]);
+
+                if (material == null || material == Material.AIR) {
+                    player.sendMessage(color("&cInvalid item name."));
+                    return true;
+                }
+
+                int amount;
+                double reward;
+
+                try {
+                    amount = Integer.parseInt(args[2]);
+                    reward = Double.parseDouble(args[3]);
+
+                    if (amount < 1 || amount > 2304
+                            || !Double.isFinite(reward) || reward <= 0) {
+                        throw new NumberFormatException();
+                    }
+                } catch (NumberFormatException e) {
+                    player.sendMessage(color("&cEnter a valid amount and reward."));
+                    return true;
+                }
+
+                orderManager.createOrder(player, material, amount, reward);
+                return true;
+            }
+
+            player.sendMessage(color(
+                    "&cUsage: /order or /order create <item> <amount> <reward>"
+            ));
+
             return true;
         });
 
@@ -211,6 +268,10 @@ public class EnchantedSMP extends JavaPlugin {
         return auctionHouseManager;
     }
 
+    public OrderManager getOrderManager() {
+        return orderManager;
+    }
+
     @Override
     public void onDisable() {
         if (shardManager != null) {
@@ -219,6 +280,10 @@ public class EnchantedSMP extends JavaPlugin {
 
         if (auctionHouseManager != null) {
             auctionHouseManager.save();
+        }
+
+        if (orderManager != null) {
+            orderManager.save();
         }
     }
 }
