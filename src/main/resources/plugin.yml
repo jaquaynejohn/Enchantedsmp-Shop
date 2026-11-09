@@ -8,6 +8,7 @@ description: Custom EnchantedSMP plugin
 
 softdepend:
   - Vault
+  - LuckPerms
 
 commands:
   shop:
@@ -30,6 +31,11 @@ commands:
     usage: /order
     permission: enchantedsmp.order
 
+  kit:
+    description: Opens the rank kits menu
+    usage: /kit
+    permission: enchantedsmp.kit
+
 permissions:
   enchantedsmp.shop:
     description: Allows players to use the shop
@@ -50,3 +56,11 @@ permissions:
   enchantedsmp.order:
     description: Allows players to use player orders
     default: true
+
+  enchantedsmp.kit:
+    description: Allows players to use rank kits
+    default: true
+
+  enchantedsmp.kit.admin:
+    description: Allows editing and resetting kits
+    default: op
