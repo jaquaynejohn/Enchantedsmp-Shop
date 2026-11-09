@@ -2,7 +2,9 @@
 package com.enchanted.smp;
 
 import net.milkbowl.vault.economy.Economy;
+import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
+import org.bukkit.OfflinePlayer;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -27,7 +29,6 @@ public class EnchantedSMP extends JavaPlugin {
         shardManager = new ShardManager(this);
         shopManager = new ShopManager(this);
 
-        // SHOP COMMAND
         getCommand("shop").setExecutor((sender, command, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("Only players can use this command.");
@@ -38,7 +39,6 @@ public class EnchantedSMP extends JavaPlugin {
             return true;
         });
 
-        // SHARD COMMAND
         getCommand("shard").setExecutor((sender, command, label, args) -> {
 
             if (args.length == 0) {
@@ -47,18 +47,81 @@ public class EnchantedSMP extends JavaPlugin {
                     return true;
                 }
 
-                double balance = shardManager.getBalance(player);
-
-                player.sendMessage(color(
+                sender.sendMessage(color(
                         "&5&lENCHANTEDSMP &8» &dYour Shards: &f"
-                                + balance
+                                + shardManager.getBalance(player)
                 ));
                 return true;
             }
 
+            if (!sender.hasPermission("enchantedsmp.shard.admin")) {
+                sender.sendMessage(color("&cYou cannot manage shards."));
+                return true;
+            }
+
+            if (args.length != 3) {
+                sender.sendMessage(color(
+                        "&cUsage: /shard <give|take|set> <player> <amount>"
+                ));
+                return true;
+            }
+
+            String action = args[0].toLowerCase();
+            OfflinePlayer target = Bukkit.getOfflinePlayer(args[1]);
+
+            if (!target.hasPlayedBefore() && !target.isOnline()) {
+                sender.sendMessage(color("&cPlayer not found."));
+                return true;
+            }
+
+            double amount;
+
+            try {
+                amount = Double.parseDouble(args[2]);
+
+                if (!Double.isFinite(amount) || amount <= 0) {
+                    throw new NumberFormatException();
+                }
+            } catch (NumberFormatException e) {
+                sender.sendMessage(color("&cEnter a valid positive amount."));
+                return true;
+            }
+
+            switch (action) {
+                case "give":
+                    shardManager.giveShards(target, amount);
+                    break;
+
+                case "take":
+                    if (!shardManager.takeShards(target, amount)) {
+                        sender.sendMessage(color("&cNot enough shards!"));
+                        return true;
+                    }
+                    break;
+
+                case "set":
+                    shardManager.setShards(target, amount);
+                    break;
+
+                default:
+                    sender.sendMessage(color(
+                            "&cUsage: /shard <give|take|set> <player> <amount>"
+                    ));
+                    return true;
+            }
+
             sender.sendMessage(color(
-                    "&cUsage: /shard"
+                    "&5&lENCHANTEDSMP &8» &dSuccessfully "
+                            + action + " &f" + amount
+                            + " &dshards to &f" + target.getName() + "&d."
             ));
+
+            if (target.isOnline()) {
+                target.getPlayer().sendMessage(color(
+                        "&5&lENCHANTEDSMP &8» &dYour shard balance is now &f"
+                                + shardManager.getBalance(target) + "&d."
+                ));
+            }
 
             return true;
         });
@@ -75,9 +138,7 @@ public class EnchantedSMP extends JavaPlugin {
                 getServer().getServicesManager()
                         .getRegistration(Economy.class);
 
-        if (provider == null) {
-            return false;
-        }
+        if (provider == null) return false;
 
         economy = provider.getProvider();
         return economy != null;
