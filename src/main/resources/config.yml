@@ -1,16 +1,83 @@
 
-# EnchantedSMP Configuration
+# ==========================================
+#          ENCHANTEDSMP CONFIG
+# ==========================================
 
 settings:
   currency: "$"
+
+# ==========================================
+#             SHARD SYSTEM
+# ==========================================
+
+shards:
+  enabled: true
+
+  # Give online players shards automatically
+  reward-interval-seconds: 60
+  reward-amount: 200
+  notify-player: true
+
+# ==========================================
+#                MAIN SHOP
+# ==========================================
 
 shop:
   title: "&5&lENCHANTEDSMP SHOP"
   size: 54
 
   categories:
+
+    # ======================================
+    #              BUILDING
+    # ======================================
+    building:
+      title: "&6&lBUILDING"
+      size: 54
+
+      items: {}
+
+    # ======================================
+    #              REDSTONE
+    # ======================================
+    redstone:
+      title: "&c&lREDSTONE"
+      size: 54
+
+      items: {}
+
+    # ======================================
+    #                TRAPS
+    # ======================================
+    traps:
+      title: "&4&lTRAPS"
+      size: 54
+
+      items: {}
+
+    # ======================================
+    #                 END
+    # ======================================
+    end:
+      title: "&5&lEND"
+      size: 54
+
+      items: {}
+
+    # ======================================
+    #                NETHER
+    # ======================================
+    nether:
+      title: "&6&lNETHER"
+      size: 54
+
+      items: {}
+
+    # ======================================
+    #             CRYSTAL PVP
+    # ======================================
     cpvp:
-      title: "&5&lCRYSTAL PVP"
+      title: "&d&lCRYSTAL PVP"
       size: 54
 
       loadout:
@@ -19,14 +86,17 @@ shop:
             material: NETHERITE_HELMET
             amount: 1
             price: 5000
+
           chestplate:
             material: NETHERITE_CHESTPLATE
             amount: 1
             price: 8000
+
           leggings:
             material: NETHERITE_LEGGINGS
             amount: 1
             price: 7000
+
           boots:
             material: NETHERITE_BOOTS
             amount: 1
@@ -37,23 +107,57 @@ shop:
             material: END_CRYSTAL
             amount: 64
             price: 6000
+
           obsidian:
             material: OBSIDIAN
             amount: 64
             price: 3000
+
           totem:
             material: TOTEM_OF_UNDYING
             amount: 8
             price: 8000
+
           ender_pearl:
             material: ENDER_PEARL
             amount: 16
             price: 2000
+
           golden_apple:
             material: GOLDEN_APPLE
             amount: 32
             price: 3000
+
           experience_bottle:
             material: EXPERIENCE_BOTTLE
             amount: 64
             price: 2000
+
+    # ======================================
+    #              MOB DROPS
+    # ======================================
+    mob_drops:
+      title: "&8&lMOB DROPS"
+      size: 54
+
+      items: {}
+
+    # ======================================
+    #                FARMING
+    # ======================================
+    farming:
+      title: "&a&lFARMING"
+      size: 54
+
+      items: {}
+
+    # ======================================
+    #               SHARD SHOP
+    # ======================================
+    shard_shop:
+      title: "&d&lSHARD SHOP"
+      size: 54
+
+      currency: "SHARDS"
+
+      items: {}
