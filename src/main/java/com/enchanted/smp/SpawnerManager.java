@@ -9,14 +9,17 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.World;
 import org.bukkit.block.Block;
 import org.bukkit.block.CreatureSpawner;
-import org.bukkit.block.TileState;
+import org.bukkit.configuration.ConfigurationSection;
+import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
+import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockBreakEvent;
 import org.bukkit.event.block.BlockPlaceEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.block.Action;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
@@ -25,8 +28,6 @@ import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.BlockStateMeta;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.persistence.PersistentDataType;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 
 import java.io.File;
 import java.io.IOException;
@@ -40,8 +41,11 @@ public class SpawnerManager implements Listener {
     private static final int STORAGE_LIMIT = 10000;
 
     private final EnchantedSMP plugin;
+
     private final NamespacedKey spawnerItemKey;
     private final NamespacedKey actionKey;
+    private final NamespacedKey blockIdKey;
+    private final NamespacedKey blockOwnerKey;
 
     private final Map<String, SpawnerData> spawners = new HashMap<>();
 
@@ -53,6 +57,8 @@ public class SpawnerManager implements Listener {
 
         spawnerItemKey = new NamespacedKey(plugin, "shard_spawner");
         actionKey = new NamespacedKey(plugin, "spawner_action");
+        blockIdKey = new NamespacedKey(plugin, "managed_spawner_id");
+        blockOwnerKey = new NamespacedKey(plugin, "managed_spawner_owner");
 
         file = new File(plugin.getDataFolder(), "spawners.yml");
         dataFile = YamlConfiguration.loadConfiguration(file);
@@ -67,30 +73,90 @@ public class SpawnerManager implements Listener {
                 20L,
                 20L
         );
+
+        // Save periodically rather than writing to disk every second.
+        Bukkit.getScheduler().runTaskTimer(
+                plugin,
+                this::saveSpawners,
+                1200L,
+                1200L
+        );
     }
 
-    // PLACE PURCHASED SPAWNERS
+    // ==========================================
+    //             PLACE SPAWNERS
+    // ==========================================
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlace(BlockPlaceEvent event) {
+
         ItemStack item = event.getItemInHand();
 
-        if (!item.hasItemMeta()) return;
-
-        String id = item.getItemMeta()
-                .getPersistentDataContainer()
-                .get(spawnerItemKey, PersistentDataType.STRING);
-
-        if (id == null) return;
-
-        Block block = event.getBlockPlaced();
-
-        if (!(block.getState() instanceof CreatureSpawner spawner)) {
+        if (item == null || !item.hasItemMeta()) {
             return;
         }
 
+        ItemMeta itemMeta = item.getItemMeta();
+
+        String id = itemMeta.getPersistentDataContainer().get(
+                spawnerItemKey,
+                PersistentDataType.STRING
+        );
+
+        if (id == null) {
+            return;
+        }
+
+        // Read the mob type from the actual purchased spawner item.
+        if (!(itemMeta instanceof BlockStateMeta blockMeta)) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(color(
+                    "&cInvalid spawner item!"
+            ));
+            return;
+        }
+
+        if (!(blockMeta.getBlockState() instanceof CreatureSpawner itemSpawner)) {
+            event.setCancelled(true);
+            return;
+        }
+
+        EntityType mob = itemSpawner.getSpawnedType();
+
+        if (mob == null) {
+            event.setCancelled(true);
+            event.getPlayer().sendMessage(color(
+                    "&cThis spawner has no mob type!"
+            ));
+            return;
+        }
+
+        Block block = event.getBlockPlaced();
+
+        if (!(block.getState() instanceof CreatureSpawner placedSpawner)) {
+            return;
+        }
+
+        // Set the mob type directly on the placed block.
+        placedSpawner.setSpawnedType(mob);
+
+        // Save identifying information on the actual spawner block.
+        placedSpawner.getPersistentDataContainer().set(
+                blockIdKey,
+                PersistentDataType.STRING,
+                id
+        );
+
+        placedSpawner.getPersistentDataContainer().set(
+                blockOwnerKey,
+                PersistentDataType.STRING,
+                event.getPlayer().getUniqueId().toString()
+        );
+
+        placedSpawner.update(true, false);
+
         SpawnerData data = new SpawnerData(
-                spawner.getSpawnedType(),
+                mob,
                 id,
                 event.getPlayer().getUniqueId()
         );
@@ -99,46 +165,97 @@ public class SpawnerManager implements Listener {
         saveSpawners();
 
         event.getPlayer().sendMessage(color(
-                "&5&lENCHANTEDSMP &8» &aSpawner placed!"
+                "&5&lENCHANTEDSMP &8» &a"
+                        + formatName(mob.name())
+                        + " spawner placed!"
         ));
     }
 
-    // OPEN GUI
+    // ==========================================
+    //             RIGHT-CLICK SPAWNER
+    // ==========================================
 
-    @EventHandler
+    @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
     public void onInteract(PlayerInteractEvent event) {
-        if (event.getHand() != EquipmentSlot.HAND) return;
-        if (event.getClickedBlock() == null) return;
 
-        if (!event.getAction().name().equals("RIGHT_CLICK_BLOCK")) {
+        if (event.getHand() != EquipmentSlot.HAND) {
+            return;
+        }
+
+        if (event.getAction() != Action.RIGHT_CLICK_BLOCK) {
             return;
         }
 
         Block block = event.getClickedBlock();
 
-        if (block.getType() != Material.SPAWNER) return;
+        if (block == null || block.getType() != Material.SPAWNER) {
+            return;
+        }
 
-        SpawnerData data = spawners.get(getKey(block));
+        String key = getKey(block);
 
-        if (data == null) return;
+        SpawnerData data = spawners.get(key);
+
+        // Recover block information if the saved map entry is missing.
+        if (data == null && block.getState() instanceof CreatureSpawner spawner) {
+
+            String id = spawner.getPersistentDataContainer().get(
+                    blockIdKey,
+                    PersistentDataType.STRING
+            );
+
+            String ownerString = spawner.getPersistentDataContainer().get(
+                    blockOwnerKey,
+                    PersistentDataType.STRING
+            );
+
+            if (id != null && ownerString != null) {
+                try {
+                    UUID owner = UUID.fromString(ownerString);
+
+                    data = new SpawnerData(
+                            spawner.getSpawnedType(),
+                            id,
+                            owner
+                    );
+
+                    spawners.put(key, data);
+                    saveSpawners();
+
+                } catch (IllegalArgumentException ignored) {
+                    return;
+                }
+            }
+        }
+
+        if (data == null) {
+            return;
+        }
 
         event.setCancelled(true);
 
         Player player = event.getPlayer();
 
         if (!data.owner.equals(player.getUniqueId())) {
-            player.sendMessage(color("&cThis is not your spawner!"));
+            player.sendMessage(color(
+                    "&cThis is not your spawner!"
+            ));
             return;
         }
 
         openSpawnerGUI(player, block, data);
     }
 
+    // ==========================================
+    //                 SPAWNER GUI
+    // ==========================================
+
     private void openSpawnerGUI(
             Player player,
             Block block,
             SpawnerData data
     ) {
+
         SpawnerHolder holder = new SpawnerHolder();
 
         Inventory inventory = Bukkit.createInventory(
@@ -150,10 +267,13 @@ public class SpawnerManager implements Listener {
         holder.inventory = inventory;
         holder.blockKey = getKey(block);
 
+        // INFORMATION
+
         ItemStack info = new ItemStack(Material.SPAWNER);
         ItemMeta infoMeta = info.getItemMeta();
 
         infoMeta.setDisplayName(color("&d&lSpawner Information"));
+
         infoMeta.setLore(Arrays.asList(
                 color("&7Mob: &f" + formatName(data.mob.name())),
                 color("&7Level: &d" + data.level + "&7/&d100"),
@@ -172,6 +292,7 @@ public class SpawnerManager implements Listener {
         ItemMeta upgradeMeta = upgrade.getItemMeta();
 
         upgradeMeta.setDisplayName(color("&a&lUPGRADE SPAWNER"));
+
         upgradeMeta.setLore(Arrays.asList(
                 color("&7Current Level: &f" + data.level),
                 color("&7Next Level: &f" + Math.min(data.level + 1, MAX_LEVEL)),
@@ -192,6 +313,7 @@ public class SpawnerManager implements Listener {
         ItemMeta moneyMeta = money.getItemMeta();
 
         moneyMeta.setDisplayName(color("&a&lCOLLECT EARNINGS"));
+
         moneyMeta.setLore(Arrays.asList(
                 color("&7Stored: &a$" + format(data.storedMoney)),
                 color("&eClick to collect!")
@@ -206,11 +328,16 @@ public class SpawnerManager implements Listener {
         int slot = 0;
 
         for (Map.Entry<String, Integer> entry : data.drops.entrySet()) {
-            if (slot >= 9) break;
+
+            if (slot >= 9) {
+                break;
+            }
 
             Material material = Material.matchMaterial(entry.getKey());
 
-            if (material == null) continue;
+            if (material == null || entry.getValue() <= 0) {
+                continue;
+            }
 
             ItemStack drop = new ItemStack(
                     material,
@@ -234,12 +361,13 @@ public class SpawnerManager implements Listener {
             inventory.setItem(slot++, drop);
         }
 
-        // COLLECT ALL DROPS
+        // COLLECT ALL
 
         ItemStack collectAll = new ItemStack(Material.HOPPER);
         ItemMeta collectMeta = collectAll.getItemMeta();
 
         collectMeta.setDisplayName(color("&6&lCOLLECT ALL DROPS"));
+
         collectMeta.setLore(Arrays.asList(
                 color("&7Collect every stored mob drop."),
                 color("&eClick to collect!")
@@ -253,17 +381,22 @@ public class SpawnerManager implements Listener {
         player.openInventory(inventory);
     }
 
-    // GUI CLICKS
+    // ==========================================
+    //                GUI CLICKS
+    // ==========================================
 
     @EventHandler
     public void onInventoryClick(InventoryClickEvent event) {
+
         if (!(event.getInventory().getHolder() instanceof SpawnerHolder holder)) {
             return;
         }
 
         event.setCancelled(true);
 
-        if (!(event.getWhoClicked() instanceof Player player)) return;
+        if (!(event.getWhoClicked() instanceof Player player)) {
+            return;
+        }
 
         if (event.getClickedInventory() != event.getView().getTopInventory()) {
             return;
@@ -271,22 +404,21 @@ public class SpawnerManager implements Listener {
 
         ItemStack clicked = event.getCurrentItem();
 
-        if (clicked == null || !clicked.hasItemMeta()) return;
+        if (clicked == null || !clicked.hasItemMeta()) {
+            return;
+        }
 
         String action = clicked.getItemMeta()
                 .getPersistentDataContainer()
                 .get(actionKey, PersistentDataType.STRING);
 
-        if (action == null) return;
-
-        SpawnerData data = spawners.get(holder.blockKey);
-
-        if (data == null) {
-            player.closeInventory();
+        if (action == null) {
             return;
         }
 
-        if (!data.owner.equals(player.getUniqueId())) {
+        SpawnerData data = spawners.get(holder.blockKey);
+
+        if (data == null || !data.owner.equals(player.getUniqueId())) {
             player.closeInventory();
             return;
         }
@@ -295,6 +427,7 @@ public class SpawnerManager implements Listener {
             case "upgrade" -> upgrade(player, data);
             case "money" -> collectMoney(player, data);
             case "all" -> collectAll(player, data);
+
             default -> {
                 if (action.startsWith("drop:")) {
                     collectDrop(player, data, action.substring(5));
@@ -313,9 +446,16 @@ public class SpawnerManager implements Listener {
         saveSpawners();
     }
 
+    // ==========================================
+    //                  UPGRADE
+    // ==========================================
+
     private void upgrade(Player player, SpawnerData data) {
+
         if (data.level >= MAX_LEVEL) {
-            player.sendMessage(color("&cYour spawner is already level 100!"));
+            player.sendMessage(color(
+                    "&cYour spawner is already level 100!"
+            ));
             return;
         }
 
@@ -331,7 +471,13 @@ public class SpawnerManager implements Listener {
             return;
         }
 
-        economy.withdrawPlayer(player, UPGRADE_COST);
+        var response = economy.withdrawPlayer(player, UPGRADE_COST);
+
+        if (!response.transactionSuccess()) {
+            player.sendMessage(color("&cPayment failed!"));
+            return;
+        }
+
         data.level++;
 
         player.sendMessage(color(
@@ -340,7 +486,12 @@ public class SpawnerManager implements Listener {
         ));
     }
 
+    // ==========================================
+    //              COLLECT MONEY
+    // ==========================================
+
     private void collectMoney(Player player, SpawnerData data) {
+
         if (data.storedMoney <= 0) {
             player.sendMessage(color("&cThere are no earnings to collect!"));
             return;
@@ -354,23 +505,36 @@ public class SpawnerManager implements Listener {
         }
 
         double amount = data.storedMoney;
-        data.storedMoney = 0;
 
-        economy.depositPlayer(player, amount);
+        var response = economy.depositPlayer(player, amount);
+
+        if (!response.transactionSuccess()) {
+            player.sendMessage(color("&cPayment failed!"));
+            return;
+        }
+
+        data.storedMoney = 0;
 
         player.sendMessage(color(
                 "&aCollected $" + format(amount) + "!"
         ));
     }
 
+    // ==========================================
+    //               COLLECT ONE DROP
+    // ==========================================
+
     private void collectDrop(
             Player player,
             SpawnerData data,
             String materialName
     ) {
+
         Material material = Material.matchMaterial(materialName);
 
-        if (material == null) return;
+        if (material == null) {
+            return;
+        }
 
         int amount = data.drops.getOrDefault(material.name(), 0);
 
@@ -386,17 +550,26 @@ public class SpawnerManager implements Listener {
             return;
         }
 
-        data.drops.put(material.name(), amount - collected);
+        int remaining = amount - collected;
 
-        if (data.drops.get(material.name()) <= 0) {
+        if (remaining <= 0) {
             data.drops.remove(material.name());
+        } else {
+            data.drops.put(material.name(), remaining);
         }
 
-        player.sendMessage(color("&aCollected " + collected + " "
-                + formatName(material.name()) + "!"));
+        player.sendMessage(color(
+                "&aCollected " + collected + " "
+                        + formatName(material.name()) + "!"
+        ));
     }
 
+    // ==========================================
+    //              COLLECT ALL DROPS
+    // ==========================================
+
     private void collectAll(Player player, SpawnerData data) {
+
         if (data.drops.isEmpty()) {
             player.sendMessage(color("&cThere are no drops to collect!"));
             return;
@@ -405,17 +578,22 @@ public class SpawnerManager implements Listener {
         int total = 0;
 
         for (String name : new ArrayList<>(data.drops.keySet())) {
+
             Material material = Material.matchMaterial(name);
 
-            if (material == null) continue;
+            if (material == null) {
+                continue;
+            }
 
             int amount = data.drops.getOrDefault(name, 0);
             int collected = giveItems(player, material, amount);
 
-            data.drops.put(name, amount - collected);
+            int remaining = amount - collected;
 
-            if (data.drops.get(name) <= 0) {
+            if (remaining <= 0) {
                 data.drops.remove(name);
+            } else {
+                data.drops.put(name, remaining);
             }
 
             total += collected;
@@ -426,11 +604,20 @@ public class SpawnerManager implements Listener {
         ));
     }
 
-    private int giveItems(Player player, Material material, int amount) {
+    private int giveItems(
+            Player player,
+            Material material,
+            int amount
+    ) {
+
         int remaining = amount;
 
         while (remaining > 0) {
-            int stackSize = Math.min(remaining, material.getMaxStackSize());
+
+            int stackSize = Math.min(
+                    remaining,
+                    material.getMaxStackSize()
+            );
 
             ItemStack stack = new ItemStack(material, stackSize);
 
@@ -438,6 +625,7 @@ public class SpawnerManager implements Listener {
                     player.getInventory().addItem(stack);
 
             if (!leftovers.isEmpty()) {
+
                 int leftoverAmount = leftovers.values().stream()
                         .mapToInt(ItemStack::getAmount)
                         .sum();
@@ -451,14 +639,23 @@ public class SpawnerManager implements Listener {
         return amount;
     }
 
-    // GENERATE MONEY AND MOB DROPS
+    // ==========================================
+    //           GENERATE MONEY AND DROPS
+    // ==========================================
 
     private void generate() {
+
         for (Map.Entry<String, SpawnerData> entry : spawners.entrySet()) {
+
             Block block = getBlock(entry.getKey());
 
-            if (block == null || !block.getChunk().isLoaded()) continue;
-            if (block.getType() != Material.SPAWNER) continue;
+            if (block == null || !block.getChunk().isLoaded()) {
+                continue;
+            }
+
+            if (block.getType() != Material.SPAWNER) {
+                continue;
+            }
 
             SpawnerData data = entry.getValue();
 
@@ -467,7 +664,9 @@ public class SpawnerManager implements Listener {
             Material drop = getMobDrop(data.mob);
 
             if (drop != null) {
+
                 int current = data.drops.getOrDefault(drop.name(), 0);
+
                 int newAmount = Math.min(
                         STORAGE_LIMIT,
                         current + data.level
@@ -476,12 +675,12 @@ public class SpawnerManager implements Listener {
                 data.drops.put(drop.name(), newAmount);
             }
         }
-
-        saveSpawners();
     }
 
     private Material getMobDrop(EntityType mob) {
+
         return switch (mob) {
+
             case ZOMBIE, HUSK, DROWNED, ZOMBIFIED_PIGLIN ->
                     Material.ROTTEN_FLESH;
 
@@ -527,9 +726,6 @@ public class SpawnerManager implements Listener {
             case RABBIT ->
                     Material.RABBIT;
 
-            case GOAT ->
-                    Material.GOAT_HORN;
-
             case PHANTOM ->
                     Material.PHANTOM_MEMBRANE;
 
@@ -543,42 +739,59 @@ public class SpawnerManager implements Listener {
         };
     }
 
-    // BREAK CUSTOM SPAWNER
+    // ==========================================
+    //             BREAK SPAWNER
+    // ==========================================
 
     @EventHandler
     public void onBreak(BlockBreakEvent event) {
+
         Block block = event.getBlock();
 
-        if (block.getType() != Material.SPAWNER) return;
+        if (block.getType() != Material.SPAWNER) {
+            return;
+        }
 
         String key = getKey(block);
         SpawnerData data = spawners.get(key);
 
-        if (data == null) return;
+        if (data == null) {
+            return;
+        }
 
         Player player = event.getPlayer();
 
         if (!data.owner.equals(player.getUniqueId())) {
             event.setCancelled(true);
-            player.sendMessage(color("&cYou cannot break someone else's spawner!"));
+            player.sendMessage(color(
+                    "&cYou cannot break someone else's spawner!"
+            ));
             return;
         }
 
         event.setDropItems(false);
 
-        ItemStack spawnerItem = createSpawnerItem(data);
-
-        block.getWorld().dropItemNaturally(block.getLocation(), spawnerItem);
+        block.getWorld().dropItemNaturally(
+                block.getLocation(),
+                createSpawnerItem(data)
+        );
 
         for (Map.Entry<String, Integer> entry : data.drops.entrySet()) {
+
             Material material = Material.matchMaterial(entry.getKey());
 
-            if (material == null) continue;
+            if (material == null) {
+                continue;
+            }
 
             int remaining = entry.getValue();
 
             while (remaining > 0) {
-                int amount = Math.min(remaining, material.getMaxStackSize());
+
+                int amount = Math.min(
+                        remaining,
+                        material.getMaxStackSize()
+                );
 
                 block.getWorld().dropItemNaturally(
                         block.getLocation(),
@@ -603,12 +816,18 @@ public class SpawnerManager implements Listener {
         ));
     }
 
+    // ==========================================
+    //             CREATE SPAWNER ITEM
+    // ==========================================
+
     private ItemStack createSpawnerItem(SpawnerData data) {
+
         ItemStack item = new ItemStack(Material.SPAWNER);
 
         BlockStateMeta meta = (BlockStateMeta) item.getItemMeta();
 
         if (meta.getBlockState() instanceof CreatureSpawner spawner) {
+
             spawner.setSpawnedType(data.mob);
             meta.setBlockState(spawner);
         }
@@ -628,12 +847,16 @@ public class SpawnerManager implements Listener {
         return item;
     }
 
-    // SAVE AND LOAD
+    // ==========================================
+    //                 SAVE DATA
+    // ==========================================
 
     public void saveSpawners() {
+
         dataFile.set("spawners", null);
 
         for (Map.Entry<String, SpawnerData> entry : spawners.entrySet()) {
+
             String path = "spawners." + entry.getKey();
             SpawnerData data = entry.getValue();
 
@@ -654,20 +877,31 @@ public class SpawnerManager implements Listener {
         }
     }
 
+    // ==========================================
+    //                  LOAD DATA
+    // ==========================================
+
     private void loadSpawners() {
-        ConfigurationSection section = dataFile.getConfigurationSection("spawners");
 
-        if (section == null) return;
+        ConfigurationSection section =
+                dataFile.getConfigurationSection("spawners");
 
-        for (String key : section.getKeys(false)) {
-            String path = "spawners." + key;
+        if (section == null) {
+            return;
+        }
+
+        for (String savedKey : section.getKeys(false)) {
+
+            String path = "spawners." + savedKey;
 
             try {
+
                 EntityType mob = EntityType.valueOf(
                         dataFile.getString(path + ".mob")
                 );
 
                 String id = dataFile.getString(path + ".id");
+
                 UUID owner = UUID.fromString(
                         dataFile.getString(path + ".owner")
                 );
@@ -676,50 +910,95 @@ public class SpawnerManager implements Listener {
 
                 data.level = Math.max(
                         1,
-                        Math.min(MAX_LEVEL, dataFile.getInt(path + ".level", 1))
+                        Math.min(
+                                MAX_LEVEL,
+                                dataFile.getInt(path + ".level", 1)
+                        )
                 );
 
-                data.storedMoney = dataFile.getDouble(path + ".money", 0);
+                data.storedMoney = Math.max(
+                        0,
+                        dataFile.getDouble(path + ".money", 0)
+                );
 
                 ConfigurationSection drops =
                         dataFile.getConfigurationSection(path + ".drops");
 
                 if (drops != null) {
+
                     for (String material : drops.getKeys(false)) {
-                        data.drops.put(
-                                material,
-                                Math.max(0, drops.getInt(material))
+
+                        int amount = Math.max(
+                                0,
+                                drops.getInt(material)
                         );
+
+                        if (amount > 0) {
+                            data.drops.put(material, amount);
+                        }
                     }
                 }
 
-                spawners.put(key, data);
+                String normalizedKey = normalizeKey(savedKey);
+
+                spawners.put(normalizedKey, data);
 
             } catch (Exception e) {
+
                 plugin.getLogger().warning(
-                        "Could not load spawner data: " + key
+                        "Could not load spawner data: " + savedKey
                 );
             }
         }
     }
 
-    // HELPERS
+    // ==========================================
+    //                   HELPERS
+    // ==========================================
 
     private String getKey(Block block) {
-        return block.getWorld().getUID() + "_"
-                + block.getX() + "_"
-                + block.getY() + "_"
+
+        return block.getWorld().getUID() + ":"
+                + block.getX() + ":"
+                + block.getY() + ":"
                 + block.getZ();
     }
 
+    private String normalizeKey(String key) {
+
+        String[] parts = key.contains(":")
+                ? key.split(":")
+                : key.split("_");
+
+        if (parts.length != 4) {
+            return key;
+        }
+
+        return parts[0] + ":"
+                + parts[1] + ":"
+                + parts[2] + ":"
+                + parts[3];
+    }
+
     private Block getBlock(String key) {
+
         try {
-            String[] parts = key.split("_");
+
+            String[] parts = key.contains(":")
+                    ? key.split(":")
+                    : key.split("_");
+
+            if (parts.length != 4) {
+                return null;
+            }
 
             UUID worldId = UUID.fromString(parts[0]);
+
             World world = Bukkit.getWorld(worldId);
 
-            if (world == null) return null;
+            if (world == null) {
+                return null;
+            }
 
             int x = Integer.parseInt(parts[1]);
             int y = Integer.parseInt(parts[2]);
@@ -733,12 +1012,14 @@ public class SpawnerManager implements Listener {
     }
 
     private int getDropTotal(SpawnerData data) {
+
         return data.drops.values().stream()
                 .mapToInt(Integer::intValue)
                 .sum();
     }
 
     private void setAction(ItemMeta meta, String action) {
+
         meta.getPersistentDataContainer().set(
                 actionKey,
                 PersistentDataType.STRING,
@@ -747,11 +1028,16 @@ public class SpawnerManager implements Listener {
     }
 
     private String formatName(String name) {
-        String[] words = name.toLowerCase().split("_");
+
+        String[] words = name.toLowerCase(Locale.ROOT).split("_");
+
         StringBuilder result = new StringBuilder();
 
         for (String word : words) {
-            if (result.length() > 0) result.append(" ");
+
+            if (result.length() > 0) {
+                result.append(" ");
+            }
 
             result.append(Character.toUpperCase(word.charAt(0)))
                     .append(word.substring(1));
@@ -768,7 +1054,12 @@ public class SpawnerManager implements Listener {
         return ChatColor.translateAlternateColorCodes('&', text);
     }
 
+    // ==========================================
+    //                  DATA CLASS
+    // ==========================================
+
     private static class SpawnerData {
+
         private final EntityType mob;
         private final String id;
         private final UUID owner;
@@ -776,16 +1067,26 @@ public class SpawnerManager implements Listener {
         private int level = 1;
         private double storedMoney = 0;
 
-        private final Map<String, Integer> drops = new LinkedHashMap<>();
+        private final Map<String, Integer> drops =
+                new LinkedHashMap<>();
 
-        private SpawnerData(EntityType mob, String id, UUID owner) {
+        private SpawnerData(
+                EntityType mob,
+                String id,
+                UUID owner
+        ) {
             this.mob = mob;
             this.id = id;
             this.owner = owner;
         }
     }
 
+    // ==========================================
+    //                 GUI HOLDER
+    // ==========================================
+
     private static class SpawnerHolder implements InventoryHolder {
+
         private Inventory inventory;
         private String blockKey;
 
