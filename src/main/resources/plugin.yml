@@ -4,63 +4,50 @@ version: 1.0.0
 main: com.enchanted.smp.EnchantedSMP
 api-version: '1.21'
 author: EnchantedSMP
-description: Custom EnchantedSMP plugin
+description: Custom EnchantedSMP shop, shards, kits, spawners and economy plugin.
 
 softdepend:
   - Vault
   - LuckPerms
+  - PlaceholderAPI
 
 commands:
   shop:
-    description: Opens the EnchantedSMP shop
+    description: Opens the EnchantedSMP shop.
     usage: /shop
-    permission: enchantedsmp.shop
 
   shard:
-    description: Check your shard balance
+    description: Check and manage shard balances.
     usage: /shard
     permission: enchantedsmp.shard
+    permission-message: "&cYou cannot use this command."
 
   ah:
-    description: Opens the EnchantedSMP Auction House
+    description: Opens the auction house.
     usage: /ah
-    permission: enchantedsmp.ah
 
   order:
-    description: Opens player orders
+    description: Opens and manages player orders.
     usage: /order
-    permission: enchantedsmp.order
 
   kit:
-    description: Opens the rank kits menu
+    description: Opens the EnchantedSMP kits.
     usage: /kit
     permission: enchantedsmp.kit
 
 permissions:
-  enchantedsmp.shop:
-    description: Allows players to use the shop
-    default: true
-
   enchantedsmp.shard:
-    description: Allows players to check their shards
+    description: Allows checking shard balance.
     default: true
 
   enchantedsmp.shard.admin:
-    description: Allows shard administration
+    description: Allows giving, taking and setting shards.
     default: op
 
-  enchantedsmp.ah:
-    description: Allows players to use the Auction House
-    default: true
-
-  enchantedsmp.order:
-    description: Allows players to use player orders
-    default: true
-
   enchantedsmp.kit:
-    description: Allows players to use rank kits
+    description: Allows opening the kit menu.
     default: true
 
   enchantedsmp.kit.admin:
-    description: Allows editing and resetting kits
+    description: Allows managing kits.
     default: op
