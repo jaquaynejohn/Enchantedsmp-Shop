@@ -21,6 +21,7 @@ public class EnchantedSMP extends JavaPlugin {
     private ShardShopManager shardShopManager;
     private AuctionHouseManager auctionHouseManager;
     private OrderManager orderManager;
+    private SpawnerManager spawnerManager;
 
     @Override
     public void onEnable() {
@@ -32,6 +33,7 @@ public class EnchantedSMP extends JavaPlugin {
 
         shardManager = new ShardManager(this);
         shardShopManager = new ShardShopManager(this);
+        spawnerManager = new SpawnerManager(this);
         shopManager = new ShopManager(this);
         auctionHouseManager = new AuctionHouseManager(this);
         orderManager = new OrderManager(this);
@@ -210,31 +212,6 @@ public class EnchantedSMP extends JavaPlugin {
                 return;
             }
 
-            Material material = Material.matchMaterial(args[1]);
-
-            if (material == null || material.isAir()) {
-                player.sendMessage(color("&cInvalid item."));
-                return;
-            }
-
-            int amount;
-            double reward;
-
-            try {
-                amount = Integer.parseInt(args[2]);
-                reward = Double.parseDouble(args[3]);
-
-                if (amount <= 0 || amount > 2304
-                        || !Double.isFinite(reward) || reward <= 0) {
-                    throw new NumberFormatException();
-                }
-            } catch (NumberFormatException e) {
-                player.sendMessage(color(
-                        "&cUsage: /order create <item> <amount> <reward>"
-                ));
-                return;
-            }
-
             player.sendMessage(color(
                     "&cUsage: /order create <item> <amount> <reward>"
             ));
@@ -305,11 +282,16 @@ public class EnchantedSMP extends JavaPlugin {
         return orderManager;
     }
 
+    public SpawnerManager getSpawnerManager() {
+        return spawnerManager;
+    }
+
     @Override
     public void onDisable() {
         if (shardManager != null) shardManager.save();
         if (auctionHouseManager != null) auctionHouseManager.save();
         if (orderManager != null) orderManager.save();
+        if (spawnerManager != null) spawnerManager.saveSpawners();
     }
 
     private String color(String text) {
