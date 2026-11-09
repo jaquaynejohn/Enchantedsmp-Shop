@@ -20,6 +20,16 @@ commands:
     usage: /shard
     permission: enchantedsmp.shard
 
+  ah:
+    description: Opens the EnchantedSMP Auction House
+    usage: /ah
+    permission: enchantedsmp.ah
+
+  order:
+    description: Opens player orders
+    usage: /order
+    permission: enchantedsmp.order
+
 permissions:
   enchantedsmp.shop:
     description: Allows players to use the shop
@@ -32,3 +42,11 @@ permissions:
   enchantedsmp.shard.admin:
     description: Allows shard administration
     default: op
+
+  enchantedsmp.ah:
+    description: Allows players to use the Auction House
+    default: true
+
+  enchantedsmp.order:
+    description: Allows players to use player orders
+    default: true
