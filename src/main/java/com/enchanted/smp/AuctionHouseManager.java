@@ -27,6 +27,9 @@ import java.util.UUID;
 
 public class AuctionHouseManager implements Listener {
 
+    private static final long EXPIRY_MILLIS =
+            24L * 60 * 60 * 1000;
+
     private final EnchantedSMP plugin;
     private final File file;
     private final YamlConfiguration data;
@@ -61,9 +64,11 @@ public class AuctionHouseManager implements Listener {
             for (String id : section.getKeys(false)) {
                 if (slot >= 45) break;
 
-                ItemStack item = data.getItemStack(
-                        "listings." + id + ".item"
-                );
+                String path = "listings." + id;
+
+                if (isExpired(path)) continue;
+
+                ItemStack item = data.getItemStack(path + ".item");
 
                 if (item == null || item.getType() == Material.AIR) {
                     continue;
@@ -78,9 +83,11 @@ public class AuctionHouseManager implements Listener {
 
                 lore.add(color("&8&m----------------"));
                 lore.add(color("&7Seller: &f" +
-                        data.getString("listings." + id + ".seller-name")));
+                        data.getString(path + ".seller-name")));
                 lore.add(color("&7Price: &a$" +
-                        data.getDouble("listings." + id + ".price")));
+                        data.getDouble(path + ".price")));
+                lore.add(color("&7Expires: &f" +
+                        getRemainingTime(path)));
                 lore.add(color("&eClick to purchase!"));
 
                 meta.setLore(lore);
@@ -98,11 +105,16 @@ public class AuctionHouseManager implements Listener {
 
         ItemStack info = new ItemStack(Material.BOOK);
         ItemMeta infoMeta = info.getItemMeta();
+
         infoMeta.setDisplayName(color("&d&lAUCTION HOUSE"));
+
         infoMeta.setLore(List.of(
                 color("&7Buy items listed by other players."),
-                color("&7Use &f/ah sell <price> &7to list an item.")
+                color("&7Use &f/ah sell <price> &7to list an item."),
+                color("&7Listings expire after 24 hours."),
+                color("&7Use &f/ah collect &7to collect expired items.")
         ));
+
         info.setItemMeta(infoMeta);
         inventory.setItem(49, info);
 
@@ -129,17 +141,98 @@ public class AuctionHouseManager implements Listener {
         data.set(path + ".seller-name", player.getName());
         data.set(path + ".price", price);
         data.set(path + ".item", hand.clone());
+        data.set(path + ".expires-at",
+                System.currentTimeMillis() + EXPIRY_MILLIS);
+
+        try {
+            save();
+        } catch (RuntimeException e) {
+            data.set(path, null);
+            player.sendMessage(color("&cCould not save your listing."));
+            return false;
+        }
 
         hand.setAmount(0);
-
-        save();
 
         player.sendMessage(color(
                 "&5&lENCHANTEDSMP &8» &aYour item was listed for &f$"
                         + price + "&a!"
         ));
 
+        player.sendMessage(color(
+                "&7Your auction expires in 24 hours."
+        ));
+
         return true;
+    }
+
+    public void collectExpired(Player player) {
+        ConfigurationSection section =
+                data.getConfigurationSection("listings");
+
+        if (section == null) {
+            player.sendMessage(color("&7You have no expired items to collect."));
+            return;
+        }
+
+        int collected = 0;
+        int remaining = 0;
+
+        for (String id : new ArrayList<>(section.getKeys(false))) {
+            String path = "listings." + id;
+
+            if (!player.getUniqueId().toString().equals(
+                    data.getString(path + ".seller"))) {
+                continue;
+            }
+
+            if (!isExpired(path)) continue;
+
+            ItemStack item = data.getItemStack(path + ".item");
+
+            if (item == null || item.getType() == Material.AIR) {
+                data.set(path, null);
+                continue;
+            }
+
+            var leftovers = player.getInventory().addItem(item.clone());
+
+            if (leftovers.isEmpty()) {
+                data.set(path, null);
+                collected += item.getAmount();
+            } else {
+                int leftoverAmount = 0;
+
+                for (ItemStack leftover : leftovers.values()) {
+                    leftoverAmount += leftover.getAmount();
+                }
+
+                data.set(path + ".item", leftovers.values().iterator().next());
+                collected += item.getAmount() - leftoverAmount;
+                remaining++;
+            }
+        }
+
+        save();
+
+        if (collected == 0 && remaining == 0) {
+            player.sendMessage(color(
+                    "&7You have no expired items to collect."
+            ));
+            return;
+        }
+
+        player.sendMessage(color(
+                "&5&lENCHANTEDSMP &8» &aCollected &f"
+                        + collected + " &aitem(s) from expired auctions."
+        ));
+
+        if (remaining > 0) {
+            player.sendMessage(color(
+                    "&eYour inventory was full. Use &f/ah collect"
+                            + " &eagain to collect the remaining items."
+            ));
+        }
     }
 
     @EventHandler
@@ -178,12 +271,20 @@ public class AuctionHouseManager implements Listener {
             return;
         }
 
+        if (isExpired(path)) {
+            player.sendMessage(color("&cThis auction has expired!"));
+            openAuctionHouse(player);
+            return;
+        }
+
         UUID sellerId;
 
         try {
-            sellerId = UUID.fromString(data.getString(path + ".seller", ""));
+            sellerId = UUID.fromString(
+                    data.getString(path + ".seller", "")
+            );
         } catch (IllegalArgumentException e) {
-            player.sendMessage(color("&cThis listing has invalid seller data."));
+            player.sendMessage(color("&cInvalid seller data."));
             return;
         }
 
@@ -195,16 +296,19 @@ public class AuctionHouseManager implements Listener {
         double price = data.getDouble(path + ".price");
         ItemStack item = data.getItemStack(path + ".item");
 
-        if (item == null || item.getType() == Material.AIR || price <= 0) {
+        if (item == null || item.getType() == Material.AIR
+                || price <= 0 || !Double.isFinite(price)) {
             player.sendMessage(color("&cThis listing is invalid."));
             return;
         }
 
         Inventory preview = Bukkit.createInventory(null, 36);
-        preview.setStorageContents(player.getInventory().getStorageContents());
+        preview.setStorageContents(
+                player.getInventory().getStorageContents()
+        );
 
         if (!preview.addItem(item.clone()).isEmpty()) {
-            player.sendMessage(color("&cYou don't have enough inventory space."));
+            player.sendMessage(color("&cYour inventory is full!"));
             return;
         }
 
@@ -227,12 +331,24 @@ public class AuctionHouseManager implements Listener {
 
         if (!payout.transactionSuccess()) {
             plugin.getEconomy().depositPlayer(player, price);
-            player.sendMessage(color("&cPurchase failed. Your money was refunded."));
+            player.sendMessage(color(
+                    "&cPurchase failed. Your money was refunded."
+            ));
             return;
         }
 
         data.set(path, null);
-        save();
+
+        try {
+            save();
+        } catch (RuntimeException e) {
+            plugin.getEconomy().withdrawPlayer(
+                    Bukkit.getOfflinePlayer(sellerId), price
+            );
+            plugin.getEconomy().depositPlayer(player, price);
+            player.sendMessage(color("&cPurchase failed. Your money was refunded."));
+            return;
+        }
 
         player.getInventory().addItem(item.clone());
 
@@ -253,12 +369,35 @@ public class AuctionHouseManager implements Listener {
         openAuctionHouse(player);
     }
 
+    private boolean isExpired(String path) {
+        long expiresAt = data.getLong(path + ".expires-at", 0);
+
+        // Give older listings a fresh 24-hour expiry.
+        if (expiresAt <= 0) {
+            expiresAt = System.currentTimeMillis() + EXPIRY_MILLIS;
+            data.set(path + ".expires-at", expiresAt);
+        }
+
+        return System.currentTimeMillis() >= expiresAt;
+    }
+
+    private String getRemainingTime(String path) {
+        long expiresAt = data.getLong(path + ".expires-at", 0);
+        long remaining = Math.max(0,
+                expiresAt - System.currentTimeMillis());
+
+        long hours = remaining / 3600000;
+        long minutes = (remaining % 3600000) / 60000;
+
+        return hours + "h " + minutes + "m";
+    }
+
     public void save() {
         try {
             data.save(file);
         } catch (IOException e) {
-            plugin.getLogger().severe(
-                    "Could not save auctionhouse.yml!"
+            throw new IllegalStateException(
+                    "Could not save auctionhouse.yml!", e
             );
         }
     }
