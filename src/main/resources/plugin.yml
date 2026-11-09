@@ -1,0 +1,21 @@
+
+name: EnchantedSMP
+version: 1.0.0
+main: com.enchanted.smp.EnchantedSMP
+api-version: '1.21'
+author: EnchantedSMP
+description: Custom EnchantedSMP plugin
+
+softdepend:
+  - Vault
+
+commands:
+  shop:
+    description: Opens the EnchantedSMP shop
+    usage: /shop
+    permission: enchantedsmp.shop
+
+permissions:
+  enchantedsmp.shop:
+    description: Allows players to use the shop
+    default: true
