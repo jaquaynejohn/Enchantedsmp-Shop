@@ -15,7 +15,20 @@ commands:
     usage: /shop
     permission: enchantedsmp.shop
 
+  shard:
+    description: Check your shard balance
+    usage: /shard
+    permission: enchantedsmp.shard
+
 permissions:
   enchantedsmp.shop:
     description: Allows players to use the shop
     default: true
+
+  enchantedsmp.shard:
+    description: Allows players to check their shards
+    default: true
+
+  enchantedsmp.shard.admin:
+    description: Allows shard administration
+    default: op
