@@ -19,7 +19,6 @@ import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
-import org.bukkit.inventory.ItemFlag;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.meta.ItemMeta;
 import org.bukkit.inventory.meta.trim.TrimMaterial;
@@ -40,14 +39,13 @@ import java.util.concurrent.TimeUnit;
 public class KitManager implements Listener {
 
     private final EnchantedSMP plugin;
-    private LuckPerms luckPerms;
-
+    private final LuckPerms luckPerms;
     private final File file;
     private final YamlConfiguration data;
 
-    private final Map<String, Group> menuGroups = new HashMap<>();
-
     private static final long COOLDOWN = TimeUnit.MINUTES.toMillis(15);
+
+    private final Map<Integer, String> menuGroups = new HashMap<>();
 
     public KitManager(EnchantedSMP plugin) {
         this.plugin = plugin;
@@ -59,6 +57,7 @@ public class KitManager implements Listener {
             found = null;
             plugin.getLogger().warning("LuckPerms was not found. Rank kits are disabled.");
         }
+
         this.luckPerms = found;
 
         file = new File(plugin.getDataFolder(), "kits.yml");
@@ -98,9 +97,13 @@ public class KitManager implements Listener {
         menuGroups.clear();
 
         KitHolder holder = new KitHolder();
+
         Inventory inventory = Bukkit.createInventory(
-                holder, 54, ChatColor.DARK_GREEN + "EnchantedSMP Kits"
+                holder,
+                54,
+                ChatColor.DARK_GREEN + "EnchantedSMP Kits"
         );
+
         holder.inventory = inventory;
 
         int slot = 0;
@@ -109,31 +112,29 @@ public class KitManager implements Listener {
             if (slot >= 45) break;
 
             boolean unlocked = player.isOp()
-                    || (highest != null && highest.getName().equalsIgnoreCase(group.getName()));
+                    || (highest != null &&
+                    highest.getName().equalsIgnoreCase(group.getName()));
 
-            ItemStack icon;
-
-            if (unlocked) {
-                icon = new ItemStack(Material.EMERALD_BLOCK);
-            } else {
-                icon = new ItemStack(Material.BARRIER);
-            }
+            ItemStack icon = new ItemStack(
+                    unlocked ? Material.EMERALD_BLOCK : Material.BARRIER
+            );
 
             ItemMeta meta = icon.getItemMeta();
 
             meta.setDisplayName(
-                    getRankColor(group) + ChatColor.BOLD
+                    getRankColor(group).toString()
+                            + ChatColor.BOLD
                             + capitalize(group.getName())
             );
 
             List<String> lore = new ArrayList<>();
 
             if (unlocked) {
-                lore.add(ChatColor.GREEN + "Unlocked!");
+                lore.add(ChatColor.GREEN + "UNLOCKED");
                 lore.add(ChatColor.YELLOW + "Click to claim this kit");
             } else {
                 lore.add(ChatColor.RED + "LOCKED");
-                lore.add(ChatColor.GRAY + "You cannot claim this rank's kit.");
+                lore.add(ChatColor.GRAY + "This is not your current rank.");
             }
 
             if (player.isOp()) {
@@ -144,7 +145,7 @@ public class KitManager implements Listener {
             icon.setItemMeta(meta);
 
             inventory.setItem(slot, icon);
-            menuGroups.put(group.getName().toLowerCase(), group);
+            menuGroups.put(slot, group.getName());
 
             slot++;
         }
@@ -159,7 +160,6 @@ public class KitManager implements Listener {
                 .max(Comparator.comparingInt(this::getWeight))
                 .orElseGet(() ->
                         luckPerms.getGroupManager().getGroup(user.getPrimaryGroup())
-                                .orElse(null)
                 );
     }
 
@@ -170,17 +170,22 @@ public class KitManager implements Listener {
     @EventHandler
     public void onKitClick(InventoryClickEvent event) {
         if (!(event.getWhoClicked() instanceof Player player)) return;
-        if (!(event.getView().getTopInventory().getHolder() instanceof KitHolder)) return;
+
+        if (!(event.getView().getTopInventory().getHolder()
+                instanceof KitHolder)) return;
 
         event.setCancelled(true);
 
         int slot = event.getRawSlot();
 
-        if (slot < 0 || slot >= event.getView().getTopInventory().getSize()) return;
+        if (slot < 0 ||
+                slot >= event.getView().getTopInventory().getSize()) {
+            return;
+        }
 
-        ItemStack clicked = event.getCurrentItem();
+        String groupName = menuGroups.get(slot);
 
-        if (clicked == null || clicked.getType() == Material.AIR) return;
+        if (groupName == null) return;
 
         if (luckPerms == null) return;
 
@@ -188,28 +193,15 @@ public class KitManager implements Listener {
 
         if (user == null) return;
 
-        Group highest = getHighestRank(user);
-
-        Group selected = null;
-
-        for (Group group : luckPerms.getGroupManager().getLoadedGroups()) {
-            if (group.getName().equalsIgnoreCase(
-                    ChatColor.stripColor(clicked.getItemMeta().getDisplayName())
-                            .replace(" ", "")
-            )) {
-                selected = group;
-                break;
-            }
-        }
-
-        if (selected == null) {
-            selected = findGroupFromIcon(clicked);
-        }
+        Group selected = luckPerms.getGroupManager().getGroup(groupName);
 
         if (selected == null) return;
 
+        Group highest = getHighestRank(user);
+
         boolean unlocked = player.isOp()
-                || (highest != null && highest.getName().equalsIgnoreCase(selected.getName()));
+                || (highest != null &&
+                highest.getName().equalsIgnoreCase(selected.getName()));
 
         if (!unlocked) {
             player.sendMessage(ChatColor.RED + "That rank's kit is locked!");
@@ -218,9 +210,15 @@ public class KitManager implements Listener {
 
         if (!player.isOp() && !hasNoCooldown(selected)
                 && !canClaim(player, selected)) {
+
             long remaining = getRemaining(player, selected);
-            player.sendMessage(ChatColor.RED + "You must wait "
-                    + formatTime(remaining) + " before claiming again.");
+
+            player.sendMessage(
+                    ChatColor.RED + "You must wait "
+                            + formatTime(remaining)
+                            + " before claiming again."
+            );
+
             return;
         }
 
@@ -230,39 +228,33 @@ public class KitManager implements Listener {
             setCooldown(player, selected);
         }
 
-        player.sendMessage(ChatColor.GREEN + "You claimed the "
-                + capitalize(selected.getName()) + " kit!");
+        player.sendMessage(
+                ChatColor.GREEN + "You claimed the "
+                        + capitalize(selected.getName())
+                        + " kit!"
+        );
 
         player.closeInventory();
     }
 
-    private Group findGroupFromIcon(ItemStack clicked) {
-        if (clicked == null || !clicked.hasItemMeta()) return null;
-
-        String display = ChatColor.stripColor(
-                clicked.getItemMeta().getDisplayName()
-        );
-
-        if (display == null) return null;
-
-        String name = display.replace(" ", "");
-
-        return luckPerms.getGroupManager().getLoadedGroups().stream()
-                .filter(group -> capitalize(group.getName()).equalsIgnoreCase(name))
-                .findFirst()
-                .orElse(null);
-    }
-
     private boolean hasNoCooldown(Group group) {
-        Group admin = luckPerms.getGroupManager().getGroup("admin").orElse(null);
+        Group admin = luckPerms.getGroupManager().getGroup("admin");
 
-        return admin != null && getWeight(group) >= getWeight(admin);
+        if (admin == null) {
+            return false;
+        }
+
+        return getWeight(group) >= getWeight(admin);
     }
 
     private boolean isNetheriteRank(Group group) {
-        Group mod = luckPerms.getGroupManager().getGroup("mod").orElse(null);
+        Group mod = luckPerms.getGroupManager().getGroup("mod");
 
-        return mod != null && getWeight(group) >= getWeight(mod);
+        if (mod == null) {
+            return false;
+        }
+
+        return getWeight(group) >= getWeight(mod);
     }
 
     private boolean canClaim(Player player, Group group) {
@@ -271,9 +263,13 @@ public class KitManager implements Listener {
 
     private long getRemaining(Player player, Group group) {
         String path = getCooldownPath(player, group);
+
         long last = data.getLong(path, 0);
 
-        return Math.max(0, COOLDOWN - (System.currentTimeMillis() - last));
+        return Math.max(
+                0,
+                COOLDOWN - (System.currentTimeMillis() - last)
+        );
     }
 
     private void setCooldown(Player player, Group group) {
@@ -281,20 +277,19 @@ public class KitManager implements Listener {
                 getCooldownPath(player, group),
                 System.currentTimeMillis()
         );
+
         save();
     }
 
     private String getCooldownPath(Player player, Group group) {
-        return "cooldowns." + player.getUniqueId() + "."
+        return "cooldowns."
+                + player.getUniqueId()
+                + "."
                 + group.getName().toLowerCase();
     }
 
     private void giveKit(Player player, Group group) {
         boolean netherite = isNetheriteRank(group);
-
-        Material armorMaterial = netherite
-                ? Material.NETHERITE_CHESTPLATE
-                : Material.DIAMOND_CHESTPLATE;
 
         Material[] armor = netherite
                 ? new Material[]{
@@ -312,6 +307,7 @@ public class KitManager implements Listener {
 
         for (Material material : armor) {
             ItemStack item = new ItemStack(material);
+
             ItemMeta meta = item.getItemMeta();
 
             addEnchant(meta, "protection", 4);
@@ -329,25 +325,37 @@ public class KitManager implements Listener {
             }
 
             if (meta instanceof ArmorMeta armorMeta) {
-                TrimMaterial trimMaterial = getTrimMaterial(group);
-                armorMeta.setTrim(new ArmorTrim(
-                        trimMaterial,
-                        TrimPattern.SENTRY
-                ));
+                armorMeta.setTrim(
+                        new ArmorTrim(
+                                getTrimMaterial(group),
+                                TrimPattern.SENTRY
+                        )
+                );
             }
 
             item.setItemMeta(meta);
             give(player, item);
         }
 
-        give(player, enchanted(Material.NETHERITE_SWORD,
-                "sharpness", 5, "unbreaking", 3, "mending", 1));
+        give(player, enchanted(
+                Material.NETHERITE_SWORD,
+                "sharpness", 5,
+                "unbreaking", 3,
+                "mending", 1
+        ));
 
-        give(player, enchanted(Material.NETHERITE_PICKAXE,
-                "efficiency", 5, "unbreaking", 3, "mending", 1));
+        give(player, enchanted(
+                Material.NETHERITE_PICKAXE,
+                "efficiency", 5,
+                "unbreaking", 3,
+                "mending", 1
+        ));
 
-        give(player, enchanted(Material.SHIELD,
-                "unbreaking", 3, "mending", 1));
+        give(player, enchanted(
+                Material.SHIELD,
+                "unbreaking", 3,
+                "mending", 1
+        ));
 
         give(player, new ItemStack(Material.END_CRYSTAL, 64));
         give(player, new ItemStack(Material.OBSIDIAN, 64));
@@ -366,12 +374,15 @@ public class KitManager implements Listener {
         ItemMeta meta = item.getItemMeta();
 
         for (int i = 0; i < enchantments.length; i += 2) {
-            addEnchant(meta,
+            addEnchant(
+                    meta,
                     (String) enchantments[i],
-                    (Integer) enchantments[i + 1]);
+                    (Integer) enchantments[i + 1]
+            );
         }
 
         item.setItemMeta(meta);
+
         return item;
     }
 
@@ -386,25 +397,40 @@ public class KitManager implements Listener {
     }
 
     private void give(Player player, ItemStack item) {
-        Map<Integer, ItemStack> leftovers = player.getInventory().addItem(item);
+        Map<Integer, ItemStack> leftovers =
+                player.getInventory().addItem(item);
 
         for (ItemStack leftover : leftovers.values()) {
-            player.getWorld().dropItemNaturally(player.getLocation(), leftover);
+            player.getWorld().dropItemNaturally(
+                    player.getLocation(),
+                    leftover
+            );
         }
     }
 
     private TrimMaterial getTrimMaterial(Group group) {
-        String color = getRankColor(group).toString();
+        ChatColor color = getRankColor(group);
 
-        if (color.contains("RED")) return TrimMaterial.REDSTONE;
-        if (color.contains("BLUE")) return TrimMaterial.LAPIS;
-        if (color.contains("GREEN")) return TrimMaterial.EMERALD;
-        if (color.contains("GOLD") || color.contains("YELLOW")) return TrimMaterial.GOLD;
-        if (color.contains("AQUA")) return TrimMaterial.DIAMOND;
-        if (color.contains("LIGHT_PURPLE")) return TrimMaterial.AMETHYST;
-        if (color.contains("DARK_PURPLE")) return TrimMaterial.AMETHYST;
-        if (color.contains("WHITE")) return TrimMaterial.QUARTZ;
-        if (color.contains("GRAY")) return TrimMaterial.IRON;
+        if (color == ChatColor.RED || color == ChatColor.DARK_RED)
+            return TrimMaterial.REDSTONE;
+
+        if (color == ChatColor.BLUE || color == ChatColor.DARK_BLUE)
+            return TrimMaterial.LAPIS;
+
+        if (color == ChatColor.GREEN || color == ChatColor.DARK_GREEN)
+            return TrimMaterial.EMERALD;
+
+        if (color == ChatColor.GOLD || color == ChatColor.YELLOW)
+            return TrimMaterial.GOLD;
+
+        if (color == ChatColor.AQUA || color == ChatColor.DARK_AQUA)
+            return TrimMaterial.DIAMOND;
+
+        if (color == ChatColor.LIGHT_PURPLE || color == ChatColor.DARK_PURPLE)
+            return TrimMaterial.AMETHYST;
+
+        if (color == ChatColor.WHITE)
+            return TrimMaterial.QUARTZ;
 
         return TrimMaterial.IRON;
     }
@@ -426,20 +452,35 @@ public class KitManager implements Listener {
         if (lower.contains("&c") || lower.contains("§c") || lower.contains("<red>"))
             return ChatColor.RED;
 
+        if (lower.contains("&4") || lower.contains("§4"))
+            return ChatColor.DARK_RED;
+
         if (lower.contains("&9") || lower.contains("§9") || lower.contains("<blue>"))
             return ChatColor.BLUE;
+
+        if (lower.contains("&1") || lower.contains("§1"))
+            return ChatColor.DARK_BLUE;
 
         if (lower.contains("&a") || lower.contains("§a") || lower.contains("<green>"))
             return ChatColor.GREEN;
 
+        if (lower.contains("&2") || lower.contains("§2"))
+            return ChatColor.DARK_GREEN;
+
         if (lower.contains("&6") || lower.contains("§6") || lower.contains("<gold>"))
             return ChatColor.GOLD;
+
+        if (lower.contains("&e") || lower.contains("§e"))
+            return ChatColor.YELLOW;
 
         if (lower.contains("&b") || lower.contains("§b") || lower.contains("<aqua>"))
             return ChatColor.AQUA;
 
         if (lower.contains("&d") || lower.contains("§d") || lower.contains("<light_purple>"))
             return ChatColor.LIGHT_PURPLE;
+
+        if (lower.contains("&5") || lower.contains("§5"))
+            return ChatColor.DARK_PURPLE;
 
         if (lower.contains("&f") || lower.contains("§f") || lower.contains("<white>"))
             return ChatColor.WHITE;
