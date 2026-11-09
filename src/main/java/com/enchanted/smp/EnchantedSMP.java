@@ -1,6 +1,7 @@
 
 package com.enchanted.smp;
 
+import me.clip.placeholderapi.PlaceholderAPIPlugin;
 import net.milkbowl.vault.economy.Economy;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -39,6 +40,13 @@ public class EnchantedSMP extends JavaPlugin {
         auctionHouseManager = new AuctionHouseManager(this);
         orderManager = new OrderManager(this);
         kitManager = new KitManager(this);
+
+        if (Bukkit.getPluginManager().getPlugin("PlaceholderAPI") != null) {
+            new ShardPlaceholderExpansion(this).register();
+            getLogger().info("Shard placeholders registered!");
+        } else {
+            getLogger().warning("PlaceholderAPI not found! Shard placeholders disabled.");
+        }
 
         getLogger().info("EnchantedSMP has been enabled!");
     }
