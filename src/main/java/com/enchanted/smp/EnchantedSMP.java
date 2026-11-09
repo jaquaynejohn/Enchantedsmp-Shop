@@ -2,7 +2,7 @@
 package com.enchanted.smp;
 
 import net.milkbowl.vault.economy.Economy;
-import org.bukkit.command.Command;
+import org.bukkit.ChatColor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.RegisteredServiceProvider;
@@ -27,6 +27,7 @@ public class EnchantedSMP extends JavaPlugin {
         shardManager = new ShardManager(this);
         shopManager = new ShopManager(this);
 
+        // SHOP COMMAND
         getCommand("shop").setExecutor((sender, command, label, args) -> {
             if (!(sender instanceof Player player)) {
                 sender.sendMessage("Only players can use this command.");
@@ -34,6 +35,31 @@ public class EnchantedSMP extends JavaPlugin {
             }
 
             shopManager.openMainMenu(player);
+            return true;
+        });
+
+        // SHARD COMMAND
+        getCommand("shard").setExecutor((sender, command, label, args) -> {
+
+            if (args.length == 0) {
+                if (!(sender instanceof Player player)) {
+                    sender.sendMessage("Only players can use this command.");
+                    return true;
+                }
+
+                double balance = shardManager.getBalance(player);
+
+                player.sendMessage(color(
+                        "&5&lENCHANTEDSMP &8» &dYour Shards: &f"
+                                + balance
+                ));
+                return true;
+            }
+
+            sender.sendMessage(color(
+                    "&cUsage: /shard"
+            ));
+
             return true;
         });
 
@@ -55,6 +81,10 @@ public class EnchantedSMP extends JavaPlugin {
 
         economy = provider.getProvider();
         return economy != null;
+    }
+
+    private String color(String text) {
+        return ChatColor.translateAlternateColorCodes('&', text);
     }
 
     public Economy getEconomy() {
