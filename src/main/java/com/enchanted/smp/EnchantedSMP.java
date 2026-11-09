@@ -12,6 +12,7 @@ public class EnchantedSMP extends JavaPlugin {
 
     private Economy economy;
     private ShopManager shopManager;
+    private ShardManager shardManager;
 
     @Override
     public void onEnable() {
@@ -23,6 +24,7 @@ public class EnchantedSMP extends JavaPlugin {
             return;
         }
 
+        shardManager = new ShardManager(this);
         shopManager = new ShopManager(this);
 
         getCommand("shop").setExecutor((sender, command, label, args) -> {
@@ -45,7 +47,7 @@ public class EnchantedSMP extends JavaPlugin {
 
         RegisteredServiceProvider<Economy> provider =
                 getServer().getServicesManager()
-                .getRegistration(Economy.class);
+                        .getRegistration(Economy.class);
 
         if (provider == null) {
             return false;
@@ -61,5 +63,16 @@ public class EnchantedSMP extends JavaPlugin {
 
     public ShopManager getShopManager() {
         return shopManager;
+    }
+
+    public ShardManager getShardManager() {
+        return shardManager;
+    }
+
+    @Override
+    public void onDisable() {
+        if (shardManager != null) {
+            shardManager.save();
+        }
     }
 }
