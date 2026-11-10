@@ -188,7 +188,7 @@ public class ShopManager implements Listener {
                 item.setItemMeta(meta);
                 inventory.setItem(slot, item);
 
-                ShopHolder holder = null;
+                
                 slot++;
             }
         }
