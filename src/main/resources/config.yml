@@ -26,10 +26,6 @@ shop:
 
   categories:
 
-    # ======================================
-    #               BUILDING
-    # ======================================
-
     building:
       title: "&6&lBUILDING SHOP"
       size: 54
@@ -74,10 +70,6 @@ shop:
           material: SMOOTH_STONE
           amount: 64
           price: 800
-
-    # ======================================
-    #                REDSTONE
-    # ======================================
 
     redstone:
       title: "&c&lREDSTONE SHOP"
@@ -124,10 +116,6 @@ shop:
           amount: 16
           price: 1500
 
-    # ======================================
-    #                  TRAPS
-    # ======================================
-
     traps:
       title: "&4&lTRAPS SHOP"
       size: 54
@@ -165,10 +153,6 @@ shop:
           amount: 1
           price: 2000
 
-    # ======================================
-    #                   END
-    # ======================================
-
     end:
       title: "&5&lEND SHOP"
       size: 54
@@ -205,10 +189,6 @@ shop:
           material: END_CRYSTAL
           amount: 16
           price: 4000
-
-    # ======================================
-    #                  NETHER
-    # ======================================
 
     nether:
       title: "&6&lNETHER SHOP"
@@ -255,14 +235,9 @@ shop:
           amount: 32
           price: 1500
 
-    # ======================================
-    #              CRYSTAL PVP
-    # ======================================
-
     cpvp:
       title: "&d&lCRYSTAL PVP"
       size: 54
-
       loadout:
         armor:
           helmet:
@@ -281,7 +256,6 @@ shop:
             material: NETHERITE_BOOTS
             amount: 1
             price: 5000
-
         items:
           end_crystal:
             material: END_CRYSTAL
@@ -315,10 +289,6 @@ shop:
             material: NETHERITE_PICKAXE
             amount: 1
             price: 8000
-
-    # ======================================
-    #                MOB DROPS
-    # ======================================
 
     mob_drops:
       title: "&8&lMOB DROPS"
@@ -365,10 +335,6 @@ shop:
           amount: 16
           price: 3000
 
-    # ======================================
-    #                 FARMING
-    # ======================================
-
     farming:
       title: "&a&lFARMING SHOP"
       size: 54
@@ -414,15 +380,10 @@ shop:
           amount: 64
           price: 1000
 
-    # ======================================
-    #                SHARD SHOP
-    # ======================================
-
     shard_shop:
       title: "&d&lSPAWNER SHOP"
       size: 54
       currency: "SHARDS"
-
       spawners:
         zombie:
           material: SPAWNER
@@ -490,6 +451,9 @@ editor:
     allow-add-items: true
     allow-edit-items: true
     allow-delete-items: true
+    add-item-from-hand: true
+    ask-for-price-only: true
+    save-item-metadata: true
 
   cpvp-editor:
     enabled: true
