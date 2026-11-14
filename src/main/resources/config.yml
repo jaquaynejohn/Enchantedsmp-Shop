@@ -21,13 +21,10 @@ shards:
 # ==========================================
 
 shop:
-  title: "&5&lENCHANTEDSMP SHOP"
-  size: 54
-
   categories:
 
     building:
-      title: "&6&lBUILDING SHOP"
+      title: "&5&lBUILDING SHOP"
       size: 54
       items:
         stone:
@@ -140,7 +137,7 @@ shop:
           material: TRIPWIRE_HOOK
           amount: 16
           price: 1000
-        pressure_plate:
+        stone_pressure_plate:
           material: STONE_PRESSURE_PLATE
           amount: 16
           price: 800
@@ -191,7 +188,7 @@ shop:
           price: 4000
 
     nether:
-      title: "&6&lNETHER SHOP"
+      title: "&4&lNETHER SHOP"
       size: 54
       items:
         netherrack:
@@ -236,7 +233,7 @@ shop:
           price: 1500
 
     cpvp:
-      title: "&d&lCRYSTAL PVP"
+      title: "&5&lCPVP SHOP"
       size: 54
       loadout:
         armor:
@@ -265,7 +262,7 @@ shop:
             material: OBSIDIAN
             amount: 64
             price: 3000
-          totem:
+          totem_of_undying:
             material: TOTEM_OF_UNDYING
             amount: 8
             price: 8000
@@ -291,7 +288,7 @@ shop:
             price: 8000
 
     mob_drops:
-      title: "&8&lMOB DROPS"
+      title: "&2&lMOB DROPS SHOP"
       size: 54
       items:
         rotten_flesh:
@@ -383,58 +380,44 @@ shop:
     shard_shop:
       title: "&d&lSPAWNER SHOP"
       size: 54
-      currency: "SHARDS"
       spawners:
         zombie:
-          material: SPAWNER
           mob: ZOMBIE
           price: 2000
         skeleton:
-          material: SPAWNER
           mob: SKELETON
           price: 3000
         creeper:
-          material: SPAWNER
           mob: CREEPER
           price: 5000
         spider:
-          material: SPAWNER
           mob: SPIDER
           price: 2500
         cave_spider:
-          material: SPAWNER
           mob: CAVE_SPIDER
           price: 3500
         blaze:
-          material: SPAWNER
           mob: BLAZE
           price: 6000
         enderman:
-          material: SPAWNER
           mob: ENDERMAN
           price: 7000
         witch:
-          material: SPAWNER
           mob: WITCH
           price: 4500
         slime:
-          material: SPAWNER
           mob: SLIME
           price: 4000
         magma_cube:
-          material: SPAWNER
           mob: MAGMA_CUBE
           price: 4500
         guardian:
-          material: SPAWNER
           mob: GUARDIAN
           price: 8000
         silverfish:
-          material: SPAWNER
           mob: SILVERFISH
           price: 2500
         endermite:
-          material: SPAWNER
           mob: ENDERMITE
           price: 3500
 
